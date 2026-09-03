@@ -136,14 +136,6 @@ python -m unittest tests.test_profile_config -v
 - `.env`、运行中间文件（`data/runs/`）和 Python 缓存（`__pycache__`）已被 `.gitignore` 忽略，不会误提交；交付状态文件在公开模板中保留为空。
 - 发布自己的分支或压缩包前，应再次检查报告、历史记录、本地路径、研究主题、Token 和 UID。
 
-## Star History
-
-如果这个项目对你有帮助，欢迎点一个 Star。
-
-下面的曲线展示 Star 数量随时间的增长，由 [star-history.com](https://star-history.com/#TCcjx/research-paper-daily-push&Date) 生成，点击图片可查看交互式大图：
-
-[![Star History Chart](https://api.star-history.com/svg?repos=TCcjx/research-paper-daily-push&type=Date)](https://star-history.com/#TCcjx/research-paper-daily-push&Date)
-
 ## 开源许可
 
 本项目采用 MIT License。为保持许可证法律文本的准确性，根目录中的 [`LICENSE`](LICENSE) 保留标准英文原文；中文用户可阅读 [`LICENSE.zh-CN.md`](LICENSE.zh-CN.md) 参考译文，解释不一致时以英文原文为准。
