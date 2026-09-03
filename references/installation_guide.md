@@ -60,7 +60,7 @@ Semantic Scholar 允许不带 Key 检索，但匿名请求会与其他用户共�
 
 ## 二、方法 A：下载 ZIP 安装，最适合新手
 
-1. 打开项目主页：<https://github.com/caofan85-lab/research-paper-daily-push>。
+1. 打开项目主页：<https://github.com/TCcjx/research-paper-daily-push>。
 2. 点击绿色的 `Code` 按钮。
 3. 点击 `Download ZIP`。
 4. 解压下载的压缩包。
@@ -95,7 +95,7 @@ C:\Users\你的用户名\.codex\skills\research-paper-daily-push\SKILL.md
 ```powershell
 New-Item -ItemType Directory -Force "$env:USERPROFILE\.codex\skills" | Out-Null
 Set-Location "$env:USERPROFILE\.codex\skills"
-git clone https://github.com/caofan85-lab/research-paper-daily-push.git
+git clone https://github.com/TCcjx/research-paper-daily-push.git
 ```
 
 完成后重新启动 Codex。

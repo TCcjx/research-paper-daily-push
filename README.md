@@ -1,7 +1,5 @@
 # research-paper-daily-push：每日科研文献雷达
 
-[![Python unittest](https://github.com/caofan85-lab/research-paper-daily-push/actions/workflows/unittest.yml/badge.svg)](https://github.com/caofan85-lab/research-paper-daily-push/actions/workflows/unittest.yml)
-
 这是一个开源的 Codex Skill，用于每天或每周检索近期科研论文，并经过初筛、证据复核、评分、去重和中文总结后，只推荐真正值得阅读的少量论文。它支持为每个专业术语同时生成严谨解释和大白话解释，也可以通过 WxPusher、Server酱或企业微信机器人推送报告，并在本地维护推送历史与研究记忆。
 
 公开模板**不包含任何预设研究主题、访问凭据、推送历史或学习记录**。在完成研究配置前，程序会停止检索，避免返回无关论文。
@@ -33,7 +31,7 @@
 可以克隆仓库：
 
 ```powershell
-git clone https://github.com/caofan85-lab/research-paper-daily-push.git
+git clone https://github.com/TCcjx/research-paper-daily-push.git
 cd research-paper-daily-push
 ```
 
@@ -133,7 +131,7 @@ python -m unittest tests.test_profile_config -v
 - `data/pushed_articles.json` 和 `data/research_memory.json` 在公开模板中为空。
 - Token、UID、SendKey 和 Webhook 只从环境变量读取。
 - 推送状态 JSON 不保存真实凭据。
-- `.env`、运行中间文件和交付状态文件不会被提交。
+- `.env`、运行中间文件（`data/runs/`）和 Python 缓存（`__pycache__`）已被 `.gitignore` 忽略，不会误提交；交付状态文件在公开模板中保留为空。
 - 发布自己的分支或压缩包前，应再次检查报告、历史记录、本地路径、研究主题、Token 和 UID。
 
 ## 开源许可
