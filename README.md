@@ -1,5 +1,7 @@
 # research-paper-daily-push：每日科研文献雷达
 
+[![GitHub stars](https://img.shields.io/github/stars/TCcjx/research-paper-daily-push?style=flat-square&logo=github)](https://github.com/TCcjx/research-paper-daily-push/stargazers)
+
 这是一个开源的 Codex Skill，用于每天或每周检索近期科研论文，并经过初筛、证据复核、评分、去重和中文总结后，只推荐真正值得阅读的少量论文。它支持为每个专业术语同时生成严谨解释和大白话解释，也可以通过 WxPusher、Server酱或企业微信机器人推送报告，并在本地维护推送历史与研究记忆。
 
 公开模板**不包含任何预设研究主题、访问凭据、推送历史或学习记录**。在完成研究配置前，程序会停止检索，避免返回无关论文。
@@ -133,6 +135,14 @@ python -m unittest tests.test_profile_config -v
 - 推送状态 JSON 不保存真实凭据。
 - `.env`、运行中间文件（`data/runs/`）和 Python 缓存（`__pycache__`）已被 `.gitignore` 忽略，不会误提交；交付状态文件在公开模板中保留为空。
 - 发布自己的分支或压缩包前，应再次检查报告、历史记录、本地路径、研究主题、Token 和 UID。
+
+## Star History
+
+如果这个项目对你有帮助，欢迎点一个 Star。
+
+下面的曲线展示 Star 数量随时间的增长，由 [star-history.com](https://star-history.com/#TCcjx/research-paper-daily-push&Date) 生成，点击图片可查看交互式大图：
+
+[![Star History Chart](https://api.star-history.com/svg?repos=TCcjx/research-paper-daily-push&type=Date)](https://star-history.com/#TCcjx/research-paper-daily-push&Date)
 
 ## 开源许可
 
