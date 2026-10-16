@@ -423,7 +423,7 @@ def search_biorxiv(_queries: list[str], start: date, end: date) -> list[dict[str
                     "is_open_access": True,
                     "is_preprint": True,
                     "formally_published_doi": published_doi,
-                    "needs_verification": ["预印本，尚未完成正式同行评议"],
+                    "needs_verification": ["预印本载体；正式发表/录用状态需另行核实"],
                 }
             )
         cursor += len(collection)
@@ -475,7 +475,7 @@ def _arxiv_entry(entry: Any) -> dict[str, Any]:
     comment = _arxiv_text(entry, ARXIV_NS, "comment")
     primary = entry.find(f"{ARXIV_NS}primary_category")
     version = re.search(r"v(\d+)$", raw_url)
-    notes = ["arXiv 预印本，尚未完成正式同行评议"]
+    notes = ["arXiv 预印本载体；正式发表/录用状态需另行核实"]
     if doi or journal_ref:
         notes.append("元数据带有 DOI 或期刊登记信息，需核实是否已在正式场所出版")
     return {
@@ -604,13 +604,17 @@ def collect(
     retrieved_count = len(papers)
     merged = [
         paper for paper in deduplicate_papers(papers)
-        if plausible_relevance(paper, relevance_terms)
+        if topic_scope or plausible_relevance(paper, relevance_terms)
     ]
     keyword_count = len(merged)
     # 准入先于时间窗口和活跃度统计，宽泛的 Agent 等关键词不能补足核心候选数。
     scoped, out_of_scope = [], []
+    stage_counts = [{"stage": g["label"], "count": 0} for g in (topic_scope or {}).get("required_groups", [])]
     for paper in merged:
         match = assess_scope(paper, topic_scope)
+        for index, stage in enumerate(match.get("stages", [])):
+            if stage["passed"]:
+                stage_counts[index]["count"] += 1
         if match["in_scope"]:
             if topic_scope:
                 paper["topic_scope_match"] = match
@@ -630,6 +634,7 @@ def collect(
         "retrieved_count": retrieved_count,
         "unique_keyword_count": keyword_count,
         "off_topic_count": keyword_count - len(merged),
+        "scope_stage_counts": stage_counts,
         "off_topic_papers": out_of_scope,
         "unique_relevant_count": len(merged),
         "errors": errors,

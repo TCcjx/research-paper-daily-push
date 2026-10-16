@@ -47,8 +47,13 @@ def assess_scope(paper: dict, scope: dict | None) -> dict:
     matched = {g["label"]: [t for t in g["terms"] if term_matches(text, t)]
                for g in scope["required_groups"]}
     missing = [label for label, terms in matched.items() if not terms]
+    stages, passed = [], True
+    for label, terms in matched.items():
+        passed = passed and bool(terms)
+        stages.append({"stage": label, "passed": passed, "matched_terms": terms})
     return {"in_scope": not missing, "name": scope["name"],
-            "matched_groups": matched, "missing_groups": missing}
+            "matched_groups": matched, "missing_groups": missing, "stages": stages,
+            "first_failed_stage": next((s["stage"] for s in stages if not s["passed"]), None)}
 
 
 def require_scope(paper: dict, scope: dict | None) -> None:

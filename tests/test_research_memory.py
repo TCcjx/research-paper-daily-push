@@ -212,7 +212,7 @@ class BuildContextTests(unittest.TestCase):
         self.assertEqual(context["learned_report_count"], 1)
         self.assertEqual(context["strong_recommendation_count"], 2)
         self.assertEqual(context["scope_note"], memory_module.SCOPE_NOTE)
-        self.assertIn("不得据此降低70分阈值", context["use_guidance"])
+        self.assertIn("当前主题/场所门槛与交付去重范围", context["use_guidance"])
 
     def test_highest_scored_paper_comes_first(self) -> None:
         context = memory_module.build_context(self._memory_with_two_papers())

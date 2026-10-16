@@ -53,6 +53,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertEqual(draft["articles"][0]["score_status"], "pending_evidence_review")
         draft["articles"] = [article(title="topic fixture", doi="10.1000/fixture", publication_date="2026-10-16",
                                      is_preprint=True, article_type="preprint")]
+        draft["articles"][0].update(venue_evidence={"venue":"AAAI Conference on Artificial Intelligence",
+            "url":"https://example.org/paper", "publication_type":"full", "status":"accepted", "verified":True},
+            agent_assessment={"integrated":False})
         # 此处模拟研究人员完成阅读，测试只验证完整数据流，不声称这是一篇真实论文。
         atomic_write_json(reviewed, draft)
         report = self.root / "daily.md"
@@ -65,8 +68,11 @@ class WorkflowTests(unittest.TestCase):
             self.assertIn(term, text)
         self.assertEqual(len(load_json(self.history)), 1)
         self.assertEqual(len(load_json(self.memory)["learned_reports"]), 1)
-        with self.assertRaises(ValueError):
-            self.invoke(command)
+        self.invoke(command)
+        self.assertIn("与上次交付重复", report.read_text(encoding="utf-8"))
+        self.assertEqual(len(load_json(self.history)), 1)
+        self.invoke(command)
+        self.assertIn("与上次交付重复", report.read_text(encoding="utf-8"))
         weekly = self.root / "weekly.md"
         self.invoke(["weekly", "--profile", str(self.profile), "--sources", "arxiv",
                      "--observations", str(self.observations), "--to-date", "2026-10-16", "--output", str(weekly)])

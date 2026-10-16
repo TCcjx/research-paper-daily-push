@@ -97,7 +97,7 @@ class VenuePriorityTests(unittest.TestCase):
 
 
 class VenueWorkflowTests(unittest.TestCase):
-    def test_collect_retains_older_a_and_prepare_includes_ten_candidates(self):
+    def test_collect_retains_older_a_and_prepare_includes_all_candidates(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp)
             profile=root/"profile.json"
@@ -119,7 +119,7 @@ class VenueWorkflowTests(unittest.TestCase):
             q,draft=load_json(queue_path),load_json(draft_path)
             self.assertEqual(q["candidates"][0]["title"],"topic older A work")
             self.assertEqual(q["candidates"][0]["reading_lane"],"supplementary")
-            self.assertEqual(len(draft["articles"]),10)
+            self.assertEqual(len(draft["articles"]),11)
             self.assertEqual(draft["metadata"]["reading_order"],"venue_first")
 
     def test_delivery_reclassifies_forged_a_label(self):

@@ -8,6 +8,7 @@ from typing import Any
 
 from common import clean_text, load_json, unique_strings
 from topic_scope import validate_scope
+from publication_policy import validate_policy
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
@@ -76,10 +77,17 @@ def load_profile(path: str | Path = DEFAULT_PROFILE, *, require_configured: bool
     profile.setdefault("strong_recommendation_rules", [])
     profile.setdefault("roadmap_stages", [])
     profile.setdefault("tags", [])
-    if profile.get("reading_order", "score") not in {"score", "venue_first"}:
-        raise ProfileError("reading_order 必须是 score 或 venue_first")
+    if profile.get("reading_order", "score") not in {"score", "venue_first", "agent_first"}:
+        raise ProfileError("reading_order 必须是 score、venue_first 或 agent_first")
+    if profile.get("deduplication_scope", "all_history") not in {"all_history", "last_report"}:
+        raise ProfileError("deduplication_scope 必须是 all_history/last_report")
+    for field in ("retrieval_queries", "agent_priority_terms"):
+        value = profile.get(field, [])
+        if not isinstance(value, list) or any(not isinstance(v, str) or not v.strip() for v in value):
+            raise ProfileError(f"{field} 必须是非空字符串组成的数组")
     try:
         validate_scope(profile.get("topic_scope"))
+        validate_policy(profile.get("publication_filter"))
     except ValueError as exc:
         raise ProfileError(str(exc)) from exc
 
@@ -99,6 +107,10 @@ def load_profile(path: str | Path = DEFAULT_PROFILE, *, require_configured: bool
 
 
 def profile_queries(profile: dict[str, Any], mode: str) -> list[str]:
+    if profile.get("retrieval_queries"):
+        if mode != "all" and mode not in (profile.get("modes") or {}):
+            raise ProfileError(f"未知的研究配置模式“{mode}”")
+        return unique_strings(profile["retrieval_queries"])
     if mode == "all":
         queries = list(profile.get("queries") or [])
         configured_mode = (profile.get("modes") or {}).get("all", {})

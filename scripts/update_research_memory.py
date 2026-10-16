@@ -129,6 +129,7 @@ def compact_paper(
     return {
         "identity_key": identity_key,
         "doi": normalize_doi(article.get("doi")),
+        "source_ids": article.get("source_ids") or {},
         "title": clean_text(article.get("title")),
         "chinese_title": clean_text(article.get("chinese_title")),
         "publication_date": clean_text(article.get("publication_date")),
@@ -258,6 +259,8 @@ def learn_report(
         )
 
     memory["version"] = 1
+    if articles:
+        memory["last_paper_report_id"] = current_report_id
     memory["scope_note"] = SCOPE_NOTE
     memory["updated_at"] = utc_now_iso()
     recompute_signals(memory)
@@ -306,7 +309,7 @@ def build_context(memory: dict[str, Any], *, recent: int = 10) -> dict[str, Any]
         ],
         "recent_research_ideas": ideas[:recent],
         "use_guidance": (
-            "用于发现连续证据、研究空白和主题饱和；不得据此降低70分阈值、重复推荐已推送DOI，"
+            "用于发现连续证据、研究空白和主题饱和；须遵守当前主题/场所门槛与交付去重范围，"
             "也不得把自动累计频次当作用户明确偏好。"
         ),
     }

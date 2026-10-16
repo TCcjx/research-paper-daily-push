@@ -50,12 +50,12 @@ print(classify({'journal':'IEEE Transactions on Knowledge and Data Engineering',
 
 同时检查两条边界：新条目的简称不会在别的 venue 字符串里被误命中（必要时写进 `conflicts`），简称歧义时确实降级。等级目录只影响“认可度”，不能替代论文本身的证据复核。
 
-## 默认策略
+## 当前筛选策略
 
-排除策略仍为 label_only，不按场所身份额外排除；阅读顺序独立由研究配置 reading_order 控制。新配置默认 venue_first，同主题内已核实 CCF A→用户配置一档期刊→CCF B→二档期刊→CCF C→三档期刊→未分级/待核实。用户期刊分层不冒充 CCF 等级，默认空白，需要依据后再维护。
+内置目录的 `label_only` 用于基础等级标注，最终准入由研究配置的 `publication_filter` 控制：会议CCF A/B主会长文；期刊CAS一区/二区或JCR Q1/Q2任一体系达标。CCF期刊等级和CAS/JCR分区独立，CCF C期刊可能分区达标，不能据CCF字母排除。未启用publication_filter的旧配置继续兼容目录策略和评分阈值。
 
-场所优先模式下阅读重要性按场所60%+贡献40%计算，venue_importance 为个人代理分，不是客观科学质量。简报、正文与前三名都采用相同场所优先顺序。A类不足仍可推荐主题内其他等级或预印本；默认推荐目标10篇、复核池100篇，并查看30天补充。
+项目不附带猜测的期刊分区库；复核每篇期刊时记录具体体系、年份、学科、刊名及来源链接。任一套分区达标可准入；两套均核实不达标才排除；未知留待核实。内置CCF目录未覆盖的会议也留待核实，先依官方目录补齐后再推荐。
 
-作者自述、简称或部分名称匹配保留 candidate_ccf，verified_venue=false；不得继承为 A 类优先。最终已分级论文须提供 venue_evidence（正式论文 URL、full/regular/journal 类型）。按 CCF 官方范围，会议评级仅对应正式长文，短文、Demo、Findings、Workshop 等不继承主会等级。当前只从 arXiv 自动收集时，应在人工复核阶段访问官方论文集/期刊记录，不能凭 arXiv 页面推断尚未录用。
+作者自述、简称或部分匹配保留candidate_ccf，不能直接准入。每篇须有官方论文页面或正式录用记录venue_evidence（规范场所、URL、类型、accepted/published、verified）。会议只接受full/regular，Findings/Workshop/Short/Demo不继承主会评级。arXiv是载体，不等同于尚未录用；核实正式场所后保留载体标识并单独展示真实录用状态。
 
-strong_recommendation_requires_verified_venue 默认为 false，允许证据充分的预印本重点阅读；依旧标注预印本身份。默认关闭累计引用加分。用户可自行选择 authority_first 或 strict_ccf_or_tier，但会减少前沿召回。
+新模板采用agent_first：满足主题与场所后优先展示Agent结合；其余达标论文全部保留，不限篇数或评分门槛。兼容venue_first的场所60%+贡献40%重要性代理分，它不代表科学突破，也不能代替证据复核。

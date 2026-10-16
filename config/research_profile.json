@@ -28,5 +28,24 @@
     "crossref"
   ],
   "topic_scope": {},
-  "reading_order": "venue_first"
+  "reading_order": "agent_first",
+  "deduplication_scope": "last_report",
+  "publication_filter": {
+    "enabled": true,
+    "conference_min_ccf": "B",
+    "journal_systems": [
+      "cas",
+      "jcr"
+    ],
+    "journal_max_quartile": 2
+  },
+  "agent_priority_terms": [
+    "agent",
+    "agentic",
+    "multi-agent",
+    "multi agent",
+    "智能体",
+    "多智能体"
+  ],
+  "retrieval_queries": []
 }

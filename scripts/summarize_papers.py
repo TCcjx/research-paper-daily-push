@@ -12,7 +12,9 @@ from urllib.parse import urlparse
 
 from common import ChineseArgumentParser, clean_text, load_json, normalize_doi, normalize_title, looks_like_preprint
 from topic_scope import require_scope, validate_scope
-from venue_ranking import reading_sort_key, venue_priority, venue_importance
+from venue_ranking import reading_sort_key, venue_priority, venue_importance, load_ranking
+from publication_policy import validate_policy, evaluate_publication, validate_agent_assessment, agent_sort_key
+from deduplicate import arxiv_identity
 
 REQUIRED_INSPIRATION = ("methods", "limitations_validation")
 
@@ -47,6 +49,11 @@ def _venue_ranking(article: dict[str, Any]) -> dict[str, Any]:
 
 
 def _venue_line(article: dict[str, Any]) -> str:
+    decision = article.get("publication_decision") or {}
+    if decision.get("status") == "eligible" and decision.get("kind"):
+        evidence = decision.get("quartile_evidence") or []
+        quartiles = "；".join(f"{v['system'].upper()} {v['year']} " + (f"{v['quartile']}区" if v['system'] == 'cas' else f"Q{v['quartile']}") + f"（{v['category']}） [分区证据]({v['source_url']})" for v in evidence)
+        return f"- 场所准入：{decision['venue']}；{decision['reason']}" + (f"；{quartiles}" if quartiles else "")
     venue = _venue_ranking(article)
     label = clean_text(venue.get("label"))
     if not label:
@@ -63,7 +70,8 @@ def valid_url(value: Any) -> bool:
 
 
 def validate_article(
-    article: dict[str, Any], index: int, strict: bool, require_term_explanations: bool
+    article: dict[str, Any], index: int, strict: bool, require_term_explanations: bool,
+    allow_low_score: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     prefix = f"article[{index}]"
@@ -73,7 +81,7 @@ def validate_article(
     score = article.get("recommendation_score")
     if type(score) is not int or not 0 <= score <= 100:
         errors.append(f"{prefix}.recommendation_score 必须是0到100之间的整数")
-    if strict and type(score) is int and score < 70:
+    if strict and not allow_low_score and type(score) is int and score < 70:
         errors.append(f"{prefix}.recommendation_score 低于70分推荐下限")
     try:
         date.fromisoformat(article.get("publication_date", ""))
@@ -202,17 +210,27 @@ def line_items(values: Any, prefix: str = "- ") -> list[str]:
     return [f"{prefix}{item}" for item in _list(values)]
 
 
+def _publication_status(article: dict) -> str:
+    record = article.get("venue_evidence") or {}
+    status = {"accepted": "官方录用已核实", "published": "正式发表已核实"}.get(record.get("status")) if record.get("verified") is True else None
+    if article.get("is_preprint"):
+        return "预印本载体；" + (status or "录用/评议状态待核实")
+    return status or "发表/评议状态见证据"
+
+
 def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -> str:
     strong = bool(article.get("strong_recommendation"))
     heading = f"### {rank}. {clean_text(article['chinese_title'])}"
     if strong:
         heading += "　🔥 **强烈推荐**"
     doi = normalize_doi(article.get("doi")) or "暂无/需核实"
+    agent = article.get("agent_assessment") or {}
+    agent_line = ("**Agent作用：** " + agent.get("role", "") + f" [原文依据]({agent['evidence_url']})") if agent.get("integrated") is True else ""
     if not detailed:
         assessment = article.get("assessment") or {}
         confidence = {"high": "高", "medium": "中", "low": "低"}.get(assessment.get("confidence"), "待核实")
         lane = {"daily": "当日候选", "supplementary": "近期补充"}.get(article.get("reading_lane"), "时间归类待核对")
-        preprint = "｜预印本，未经正式同行评议" if article.get("is_preprint") or "preprint" in article.get("article_type", "").lower() else ""
+        preprint = "｜" + _publication_status(article)
         lines = [heading, "", f"[{clean_text(article['title'])}]({article['url']})", "",
                  f"{article['journal']}｜{article['publication_date']}｜{lane}{preprint}",
                  *([_venue_line(article)] if _venue_line(article) else []),
@@ -229,6 +247,8 @@ def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -
         else:
             lines.append("**关注度辅助证据：** 暂无可比引用快照，热度未知。")
         lines += line_items(article.get("core_findings"))
+        if agent_line:
+            lines += [agent_line]
         lines += ["", f"**局限：** {assessment.get('limitations', '需要核实')}",
                   "**可借鉴方法：** " + "; ".join(_list((article.get("research_inspiration") or {}).get("methods")))]
         if strong:
@@ -256,6 +276,7 @@ def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -
         f"- DOI：{doi}",
         f"- 论文链接：{clean_text(article['url'])}",
         f"- 论文类型：{clean_text(article['article_type'])}",
+        f"- 发表状态：{_publication_status(article)}",
         "",
         f"**推荐指数：{article['recommendation_score']}/100**",
         f"**相关性：{stars(int(components.get('relevance') or 0))}**",
@@ -270,6 +291,8 @@ def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -
         "",
     ]
     sections.extend(f"{number}. {finding}" for number, finding in enumerate(_list(article["core_findings"]), 1))
+    if agent_line:
+        sections.extend(["", agent_line])
     terms = _term_explanations(article.get("term_explanations"))
     if terms:
         sections.extend(["", "**学术名词双重解释**", ""])
@@ -389,14 +412,19 @@ def render_discovery(queue: dict) -> str:
         if not papers:
             lines += ["暂无符合初筛条件的候选。", ""]
         for p in papers:
-            review = "预印本，未经正式同行评议" if p.get("is_preprint") else "正式出版记录，单篇质量待复核"
+            review = _publication_status(p)
             lines += [f"- [{p['title']}]({p.get('url', '')})｜{p.get('publication_date', '')}｜{review}",
                       f"  - 初筛代理分 {p['recommendation_score']}；主题：{', '.join(p.get('matched_topics', []))}"]
     return "\n".join(lines).rstrip() + "\n"
 
 
-def render_report(payload: dict[str, Any], strict: bool = True) -> str:
+def render_report(payload: dict[str, Any], strict: bool = True, ranking: dict | None = None) -> str:
     validate_scope(payload.get("topic_scope"))
+    policy = payload.get("publication_filter") or {}
+    validate_policy(policy)
+    publication_gate = policy.get("enabled", False)
+    if publication_gate:
+        ranking = ranking or load_ranking()
     articles = payload.get("articles", [])
     if not isinstance(articles, list):
         raise TypeError("articles 必须是数组")
@@ -405,20 +433,36 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         raise TypeError("metadata 必须是对象")
     if payload.get("report_style", "brief") not in {"brief", "detailed"}:
         errors.append("report_style 必须是 brief/detailed")
-    if strict:
+    report_year = date.today().year
+    if strict or publication_gate:
         try:
-            date.fromisoformat(payload.get("date", ""))
+            report_year = date.fromisoformat(payload.get("date", "")).year
         except (TypeError, ValueError):
             errors.append("date 必须是有效的 YYYY-MM-DD 日期")
     require_term_explanations = clean_text(payload.get("term_explanation_mode")).casefold() == "dual"
     reading_order = (payload.get("metadata") or {}).get("reading_order", "score")
-    if reading_order not in {"score", "venue_first"}:
-        errors.append("metadata.reading_order 必须是 score/venue_first")
+    if reading_order not in {"score", "venue_first", "agent_first"}:
+        errors.append("metadata.reading_order 必须是 score/venue_first/agent_first")
     for index, article in enumerate(articles):
         if not isinstance(article, dict):
             errors.append(f"article[{index}] 必须是对象")
         else:
             require_scope(article, payload.get("topic_scope"))
+            if publication_gate:
+                decision = evaluate_publication(article, policy, ranking, year=report_year)
+                article["publication_decision"] = decision
+                article["venue_ranking"] = decision["classification"]
+                if decision["status"] != "eligible":
+                    errors.append(f"article[{index}] 未通过最终场所门槛：{decision['reason']}")
+                if strict:
+                    try:
+                        if reading_order == "agent_first":
+                            validate_agent_assessment(article)
+                        urls = {e.get("url") for e in (article.get("evidence") or []) if isinstance(e, dict)}
+                        if (article.get("venue_evidence") or {}).get("url") not in urls:
+                            errors.append(f"article[{index}] 官方录用/发表URL须列入实际阅读的 evidence")
+                    except ValueError as exc:
+                        errors.append(f"article[{index}] {exc}")
             if strict and reading_order == "venue_first":
                 if (article.get("assessment") or {}).get("importance_basis") != "venue_60_contribution_40":
                     errors.append(f"article[{index}] 请通过 deliver 生成场所优先的重要性评分")
@@ -428,24 +472,25 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
                     allowed_types = {"full", "regular"} if kind == "conference" else {"journal"}
                     if not isinstance(evidence, dict) or not valid_url(evidence.get("url")) or evidence.get("publication_type") not in allowed_types:
                         errors.append(f"article[{index}].venue_evidence 需记录正式论文页面 url 和 publication_type（full/regular/journal），不能只引用目录或录用自述")
-            errors.extend(validate_article(article, index, strict, require_term_explanations))
+            errors.extend(validate_article(article, index, strict, require_term_explanations, allow_low_score=publication_gate))
     ideas = _list(payload.get("research_ideas"))
     if len(ideas) > 3:
         errors.append("research_ideas 最多包含3个以证据为基础的研究思路")
-    maximum = (payload.get("metadata") or {}).get("maximum", 10)
-    if type(maximum) is not int or not 1 <= maximum <= 10:
-        errors.append("metadata.maximum 必须是1–10整数")
-    elif strict and len(articles) > maximum:
+    maximum = (payload.get("metadata") or {}).get("maximum")
+    if maximum is not None and (type(maximum) is not int or maximum < 0):
+        errors.append("metadata.maximum 必须为空或非负整数，空/0表示不限")
+    elif strict and not publication_gate and maximum and len(articles) > maximum:
         errors.append(f"articles 超出本次推荐上限 {maximum}")
-    if strict and not 0 <= len(articles) <= 10:
-        errors.append("articles 最多只能包含10篇论文")
-    seen_dois, seen_titles = set(), set()
+    seen_dois, seen_titles, seen_arxiv = set(), set(), set()
     for article in articles:
         if not isinstance(article, dict):
             continue
         doi, title = normalize_doi(article.get("doi")), normalize_title(article.get("title"))
-        if (doi and doi in seen_dois) or (title and title in seen_titles):
-            errors.append("articles 含有重复 DOI 或规范化题名")
+        arxiv = arxiv_identity(article)
+        if (doi and doi in seen_dois) or (title and title in seen_titles) or (arxiv and arxiv in seen_arxiv):
+            errors.append("articles 含有重复 DOI、arXiv ID 或规范化题名")
+        if arxiv:
+            seen_arxiv.add(arxiv)
         if doi:
             seen_dois.add(doi)
         if title:
@@ -457,8 +502,8 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
     metadata = payload.get("metadata") or {}
     retrieved = int(metadata.get("retrieved_count") or 0)
     screened = int(metadata.get("screened_count") or 0)
-    articles = sorted(articles, key=reading_sort_key if reading_order == "venue_first"
-                      else lambda item: int(item.get("recommendation_score") or 0), reverse=True)
+    sort_key = (lambda p: agent_sort_key(p, reviewed=True)) if reading_order == "agent_first" else reading_sort_key if reading_order == "venue_first" else lambda p: int(p.get("recommendation_score") or 0)
+    articles = sorted(articles, key=sort_key, reverse=True)
     parts = [
         "# 【今日科研文献雷达】",
         "",
@@ -473,6 +518,23 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         parts += [f"核心主题：{payload['topic_scope']['name']}", ""]
     if reading_order == "venue_first":
         parts += ["阅读顺序：同主题内已核实 CCF A 类优先，再参考其他场所等级、相关性和贡献；未核实录用不按 A 类计算。重要性按场所60%与贡献40%计算，为个人阅读优先级。", ""]
+    if publication_gate:
+        parts += ["场所门槛：会议CCF A/B；期刊中科院一区/二区或JCR Q1/Q2，任一达标即可。最终篇数不限，不以推荐分设门槛。", ""]
+    if reading_order == "agent_first":
+        stages = " → ".join(g["label"] for g in (payload.get("topic_scope") or {}).get("required_groups", []))
+        parts += [f"阅读顺序：{stages or '先满足研究主题'}；场所达标后优先展示经证据核实的Agent结合工作，其余达标论文完整保留。", ""]
+    stage_counts = metadata.get("scope_stage_counts") or []
+    if stage_counts:
+        parts += ["主题筛选：" + " → ".join(f"{s['stage']} {s['count']}篇" for s in stage_counts), ""]
+    for field, label in (("pending_verification", "待核实（未进入推荐）"), ("publication_exclusions", "场所不达标（已过滤）"), ("duplicates_not_recommended", "与上次交付重复（已去重）")):
+        items = payload.get(field) or []
+        if items:
+            parts += [f"## {label}：{len(items)}篇", ""]
+            for p in items:
+                parts += [f"- [{p.get('title', '')}]({p.get('url', '')})：" + ("已在参照报告中交付" if field == "duplicates_not_recommended" else (p.get('publication_decision') or {}).get('reason', '需补充证据'))]
+                if field != "duplicates_not_recommended" and p.get("review_note"):
+                    parts += ["  - 复核记录：" + clean_text(p["review_note"])]
+            parts += [""]
     parts += render_radar(payload.get("radar") or {})
     parts += render_updates(payload.get("updates") or [])
     venue_summary = render_venue_distribution(metadata.get("venue_distribution"))
@@ -483,7 +545,7 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         parts.extend(["> 检索提示：" + "；".join(warnings), ""])
     if not articles:
         parts.extend([
-            "今天没有达到推荐阈值且证据充分的论文。宁缺毋滥，不用低相关性论文填充名额。",
+            "今天没有通过主题、场所证据核实及去重的新论文；待核实记录见上方。" if publication_gate else "今天没有达到推荐阈值且证据充分的论文。宁缺毋滥，不用低相关性论文填充名额。",
             "",
             "## 今日最值得阅读前三名",
             "",
@@ -518,13 +580,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--input", required=True, help="经过 Codex 复核的 JSON")
     parser.add_argument("--output", required=True, help="Markdown 报告路径")
     parser.add_argument("--allow-draft", action="store_true", help="仅调试时允许使用初步 score_status")
+    parser.add_argument("--ranking", help="CCF目录路径；默认使用项目目录")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     payload = load_json(args.input, {})
-    report = render_report(payload, strict=not args.allow_draft)
+    report = render_report(payload, strict=not args.allow_draft, ranking=load_ranking(args.ranking) if args.ranking else None)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(report, encoding="utf-8", newline="\n")

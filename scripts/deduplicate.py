@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,15 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_HISTORY = SCRIPT_DIR.parent / "data" / "pushed_articles.json"
 
 
+def arxiv_identity(paper: dict) -> str:
+    value = clean_text((paper.get("source_ids") or {}).get("arxiv") or paper.get("arxiv"))
+    if not value:
+        match = re.search(r"arxiv\.org/(?:abs|pdf)/([^?#]+)", paper.get("url", ""))
+        value = match.group(1) if match else ""
+    value = re.sub(r"^(?:https?://(?:export\.)?arxiv\.org/(?:abs|pdf)/|arxiv:)", "", value, flags=re.I)
+    return re.sub(r"v\d+$", "", re.sub(r"\.pdf$", "", value)).casefold()
+
+
 def load_history(path: str | Path) -> list[dict[str, Any]]:
     payload = load_json(path, [])
     if isinstance(payload, dict):
@@ -32,6 +42,24 @@ def load_history(path: str | Path) -> list[dict[str, Any]]:
     if not isinstance(payload, list):
         raise TypeError("历史文件必须是 JSON 数组，或包含 articles 数组的对象")
     return [item for item in payload if isinstance(item, dict)]
+
+
+def history_reference(history: list[dict], memory: dict, scope: str = "all_history") -> list[dict]:
+    """按最后一次实际交付报告取去重参照；旧记忆缺失时退回最后交付日期。"""
+    if scope != "last_report" or not history:
+        return history
+    # 零新增日报没有实际交付新论文，不清空上次论文批次，避免连续重跑隔次重推。
+    reports = [r for r in (memory.get("learned_reports") or []) if r.get("article_count") != 0]
+    if reports:
+        latest = next((r for r in reports if r.get("report_id") == memory.get("last_paper_report_id")), None)
+        latest = latest or max(reports, key=lambda r: (r.get("learned_at", ""), r.get("date", "")))
+        papers = [p for p in memory.get("papers", []) if latest.get("report_id") in (p.get("report_ids") or [])]
+        dois = {normalize_doi(p.get("doi")) for p in papers if p.get("doi")} | {normalize_doi(d) for d in latest.get("dois", []) if d}
+        titles = {normalize_title(p.get("title")) for p in papers if p.get("title")}
+        ids = {arxiv_identity(p) for p in papers if arxiv_identity(p)}
+        return [p for p in history if (p.get("doi") and normalize_doi(p["doi"]) in dois) or normalize_title(p.get("title")) in titles or (arxiv_identity(p) and arxiv_identity(p) in ids)]
+    latest_date = max(p.get("pushed_date", "") for p in history)
+    return [p for p in history if p.get("pushed_date", "") == latest_date]
 
 
 def build_indexes(history: list[dict[str, Any]]) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
@@ -69,6 +97,7 @@ def meaningful_update(old: dict[str, Any], new: dict[str, Any]) -> list[str]:
 
 def filter_history(papers: list[dict[str, Any]], history: list[dict[str, Any]]) -> dict[str, Any]:
     by_doi, by_title = build_indexes(history)
+    by_arxiv = {arxiv_identity(p): p for p in history if arxiv_identity(p)}
     new_items: list[dict[str, Any]] = []
     updates: list[dict[str, Any]] = []
     duplicates: list[dict[str, Any]] = []
@@ -76,7 +105,7 @@ def filter_history(papers: list[dict[str, Any]], history: list[dict[str, Any]]) 
         doi = normalize_doi(paper.get("doi"))
         title = normalize_title(paper.get("title"))
         previous = by_doi.get(doi) if doi else None
-        previous = previous or (by_title.get(title) if title else None)
+        previous = previous or by_arxiv.get(arxiv_identity(paper)) or (by_title.get(title) if title else None)
         item = dict(paper)
         if previous is None:
             item["history_status"] = "new"
@@ -121,11 +150,12 @@ def commit_history(
     pushed_date: str,
 ) -> tuple[list[dict[str, Any]], int]:
     by_doi, by_title = build_indexes(history)
+    by_arxiv = {arxiv_identity(p): p for p in history if arxiv_identity(p)}
     committed = 0
     for paper in papers:
         doi = normalize_doi(paper.get("doi"))
         title_key = normalize_title(paper.get("title"))
-        previous = (by_doi.get(doi) if doi else None) or by_title.get(title_key)
+        previous = (by_doi.get(doi) if doi else None) or by_arxiv.get(arxiv_identity(paper)) or by_title.get(title_key)
         if previous:
             # 交付了更新通知后推进旧记录，避免每天重复通知同一变化。
             if meaningful_update(previous, paper):
@@ -139,6 +169,8 @@ def commit_history(
                 previous["last_update_delivered"] = pushed_date
                 if doi:
                     by_doi[doi] = previous
+                if arxiv_identity(paper):
+                    by_arxiv[arxiv_identity(paper)] = previous
             continue
         record = {
             "doi": doi,
@@ -160,6 +192,8 @@ def commit_history(
             by_doi[doi] = record
         if title_key:
             by_title[title_key] = record
+        if arxiv_identity(paper):
+            by_arxiv[arxiv_identity(paper)] = record
         committed += 1
     history.sort(key=lambda item: (item.get("pushed_date", ""), item.get("title", "")))
     return history, committed

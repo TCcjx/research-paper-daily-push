@@ -7,7 +7,7 @@
     "arxiv"
   ],
   "watchlist": [],
-  "research_context": "统一研究主题为 temporal knowledge reasoning（时态知识推理），以时态知识图谱推理为主要对象，同主题内先按已核实发表会议与期刊的含金量安排阅读，CCF A 类优先，同等级内重点关注 Agent 与 TKG reasoning 的直接结合。每篇推荐均须明确包含时间建模、知识事实或知识图谱、推理任务三项；关注时间约束多跳推理、时态问答、外推/插值、链接或事件预测、规则推理及其可信评测。Agent、LLM、记忆、GraphRAG 仅作为实现方法，不能作为独立扩展主题。普通 Agent memory、静态 KG、一般图学习或时间序列论文不能因可迁移、潜在启发而进入精选，也不计入主题趋势。候选不足时扩展同一主题的日期窗口，仍不足则少推或零推荐。",
+  "research_context": "研究主线为 temporal knowledge reasoning（时态知识推理）。先筛时态知识图谱对象，再筛推理任务，达标论文中优先阅读Agent直接参与规划、工具调用、路径选择、检索、验证或协作的工作，其余达标推理论文完整保留。会议仅保留已核实CCF A/B主会长文；期刊中科院一区/二区或JCR Q1/Q2，任一体系达标即可。候选和最终推荐均不限篇数，不设评分门槛；与上次实际交付论文去重，版本更新另列。未知场所或分区留待核实，不臆测等级。统一查看30天并标注实际日期，不以静态KG、泛Agent记忆或一般时间序列凑数。",
   "target_system": "带时间戳/时间区间的知识事实与事件四元组上的推理系统；重点为以 TKG 为环境、工具、结构化记忆或推理对象的 Agent。任务包括时间约束多跳推理、时态问答、事件/链接预测与时态一致性维护。",
   "priority_questions": [
     "Agent 能否通过分步规划、工具调用、子图检索和时态规则完成 TKG reasoning？它相较单次 LLM 调用或固定流水线的独立贡献是什么？",
@@ -19,41 +19,37 @@
     "工作是否给出代码、数据、提示词、时间切分及可复现设置？创新点相对已有工作的变化能否从证据中核实？"
   ],
   "queries": [
-    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)",
-    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (agent OR agentic OR \"multi-agent\" OR \"tool use\" OR planning)",
-    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (\"large language model\" OR LLM OR \"language model\")"
+    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
   ],
   "modes": {
     "all": {
       "label": "统一主题：时态知识推理，优先 Agent×TKG",
-      "queries": []
+      "queries": [
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
+      ]
     },
     "agent_tkg": {
-      "label": "Agent×TKG 重点，同主题 LLM/TKG 对照",
+      "label": "先TKG再推理，达标论文中Agent结合优先",
       "queries": [
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (agent OR agentic OR \"multi-agent\" OR \"tool use\" OR planning)",
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (\"large language model\" OR LLM OR \"language model\")",
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)"
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
       ]
     },
     "temporal_kg": {
       "label": "时态知识推理主线",
       "queries": [
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)",
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA)"
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
       ]
     },
     "agent_memory": {
       "label": "有明确时态知识推理任务的 Agent 记忆",
       "queries": [
-        "(\"agent memory\" OR \"graph memory\" OR \"episodic memory\") AND (\"knowledge graph\" OR \"knowledge base\") AND (temporal OR \"time-aware\") AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)",
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (agent OR agentic OR memory) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)"
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
       ]
     },
     "benchmark_eval": {
       "label": "时态知识推理评测",
       "queries": [
-        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (benchmark OR evaluation OR \"temporal split\" OR \"data leakage\" OR reproducibility)"
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
       ]
     }
   },
@@ -358,39 +354,21 @@
     "name": "temporal knowledge reasoning",
     "required_groups": [
       {
-        "label": "知识对象",
+        "label": "时态知识图谱",
         "terms": [
-          "knowledge graph",
-          "knowledge base",
-          "temporal knowledge",
+          "temporal knowledge graph",
           "temporal kg",
+          "temporal knowledge base",
+          "time-aware knowledge graph",
+          "time-sensitive knowledge graph",
+          "dynamic knowledge graph",
           "TKG",
           "TKGR",
+          "TKGC",
           "TKGQA",
-          "时态知识",
-          "时序知识",
-          "知识图谱",
-          "知识库"
-        ]
-      },
-      {
-        "label": "时间建模",
-        "terms": [
-          "temporal",
-          "time-aware",
-          "time-sensitive",
-          "time-dependent",
-          "time-indexed",
-          "time-stamped",
-          "timestamp",
-          "time interval",
-          "TKG",
-          "TKGR",
-          "TKGQA",
-          "时态",
-          "时序",
-          "时间约束",
-          "时间戳"
+          "时态知识图谱",
+          "时序知识图谱",
+          "时态知识库"
         ]
       },
       {
@@ -409,6 +387,7 @@
           "rule learning",
           "rule mining",
           "TKGR",
+          "TKGC",
           "TKGQA",
           "推理",
           "问答",
@@ -416,10 +395,33 @@
           "插值",
           "链接预测",
           "事件预测",
-          "补全"
+          "补全",
+          "proof-carrying",
+          "deterministic checker"
         ]
       }
     ]
   },
-  "reading_order": "venue_first"
+  "reading_order": "agent_first",
+  "deduplication_scope": "last_report",
+  "publication_filter": {
+    "enabled": true,
+    "conference_min_ccf": "B",
+    "journal_systems": [
+      "cas",
+      "jcr"
+    ],
+    "journal_max_quartile": 2
+  },
+  "retrieval_queries": [
+    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal kg\" OR \"temporal knowledge base\" OR TKGR OR TKGC OR TKGQA)"
+  ],
+  "agent_priority_terms": [
+    "agent",
+    "agentic",
+    "multi-agent",
+    "multi agent",
+    "智能体",
+    "多智能体"
+  ]
 }

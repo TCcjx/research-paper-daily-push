@@ -29,9 +29,9 @@ class ParseArgsTests(unittest.TestCase):
         self.assertEqual(args.command, "collect")
         self.assertEqual(args.mode, "all")
         self.assertEqual(args.threshold, 70)
-        self.assertEqual(args.min_results, 10)
-        self.assertEqual(args.max_results, 10)
-        self.assertEqual(args.candidate_limit, 100)
+        self.assertEqual(args.min_results, 1)
+        self.assertEqual(args.max_results, 0)
+        self.assertEqual(args.candidate_limit, 0)
         self.assertEqual(args.sources, "auto")
 
     def test_opt_in_sources_are_off_by_default_but_still_acceptable(self) -> None:
@@ -117,7 +117,7 @@ class CollectStageTests(unittest.TestCase):
 
     def test_ten_relevant_papers_do_not_expand_despite_low_proxy_scores(self):
         queue = self.collect([self.paper(i, "2026-10-16") for i in range(10)])
-        self.assertIn("近24小时", queue["metadata"]["window"])
+        self.assertIn("最近30天", queue["metadata"]["window"])
         self.assertEqual(len(queue["candidates"]), 10)
 
     def test_partial_sample_is_explicit_and_not_called_rising(self):
@@ -154,6 +154,8 @@ class DeliverStageTests(unittest.TestCase):
     def fake_load_json(self, path, default=None):
         if Path(path).name.endswith(".delivery.json"):
             return self.push_status
+        if Path(path) == self.reviewed:
+            return json.loads(json.dumps(REVIEWED))
         return default if default is not None else {}
 
     def deliver(self, extra: list[str]) -> None:

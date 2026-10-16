@@ -200,11 +200,12 @@ class RenderReportTests(unittest.TestCase):
         self.assertIn("今日没有符合条件的前三名论文", report)
         self.assertIn("今日暂无足够文献证据形成可靠研究灵感", report)
 
-    def test_strict_mode_caps_articles_at_ten(self) -> None:
-        articles = [article(doi=f"10.1000/{i}") for i in range(11)]
+    def test_default_has_no_article_cap_but_explicit_legacy_cap_is_respected(self) -> None:
+        articles = [article(title=f"Paper {i}", doi=f"10.1000/{i}") for i in range(11)]
+        self.assertIn("最终推荐：11篇", render_report(payload(articles)))
         with self.assertRaises(ValueError) as raised:
-            render_report(payload(articles))
-        self.assertIn("最多只能包含10篇论文", str(raised.exception))
+            render_report(payload(articles, metadata={"maximum":10}))
+        self.assertIn("推荐上限 10", str(raised.exception))
 
     def test_non_list_articles_raise_type_error(self) -> None:
         with self.assertRaises(TypeError):

@@ -13,7 +13,7 @@
 | bioRxiv | 日期区间最多600条，抓取后本地过滤主题 | 全平台按日期取样，超过预算告警，宽窗口容易截断 |
 | Semantic Scholar | 每查询最多100条相关性结果，用年份过滤后本地日期切窗 | 可能被旧论文占满；达到上限或返回下一页时明确告警；建议作为补充 |
 
-程序报告 retrieved_count 为来源返回记录数，unique_keyword_count 为去重后关键词匹配数，off_topic_count 为其中未通过 topic_scope 的数量，unique_relevant_count 为通过主题准入的数量。source_counts 不是各数据库全领域总量。题名/摘要缺少同义词会漏筛，应维护查询、主题词和必要概念词表。
+程序报告 retrieved_count 为来源返回记录数，unique_keyword_count 为去重后进入主题筛选的数量（配置topic_scope时不再预先按评分词表漏筛），off_topic_count 为其中未通过 topic_scope 的数量，unique_relevant_count 为通过主题准入的数量。source_counts 不是各数据库全领域总量。题名/摘要缺少同义词会漏筛，应维护查询、主题词和必要概念词表。
 
 热点线索对同一30天样本的主题近7天与前23天日均数做比值。近7天至少3篇、基线非零、比值至少1.5且无来源/预算警告时标为样本发文升温；零基线只标样本新出现。它不能校正数据库收录延迟或领域会议集中发布造成的偏差。
 
@@ -33,3 +33,5 @@ watchlist 和最近交付历史的最多20篇仅调用本次启用来源：arXiv
 Crossref 游标和 Europe PMC cursorMark 已按官方文档实现；本地单元测试覆盖分页、循环游标和失败场景。实际服务可用性仍取决于运行环境与当时配额。
 
 Crossref 不支持 published 排序与 cursor 同时使用；实现使用 score 相关性排序保持游标兼容，发表范围仍由日期过滤器限定。
+
+候选与最终推荐默认不限篇数（0表示不限），不影响上表的来源分页/请求预算。TKG配置先检索对象，再按主题必要组逐级筛推理；scope_stage_counts保留各阶段数量。场所和分区由复核阶段查官方记录，不通过暂停接口推断。

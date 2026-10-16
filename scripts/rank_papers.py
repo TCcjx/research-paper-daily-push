@@ -31,6 +31,7 @@ from venue_ranking import (
 )
 from venue_ranking import classify as classify_venue
 from venue_ranking import venue_priority, reading_sort_key, CCF_RANK
+from publication_policy import agent_match, agent_sort_key, evaluate_publication
 
 WEIGHTS = {
     "relevance": 0.40,
@@ -245,10 +246,11 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
         "inspiration": inspiration,
     }
     score = round(sum(component_scores[key] * WEIGHTS[key] for key in WEIGHTS))
-    reasons = exclusion_reasons(paper, text, relevance, profile)
+    strict_publication = (profile.get("publication_filter") or {}).get("enabled", False)
+    reasons = exclusion_reasons(paper, text, 100 if strict_publication else relevance, profile)
     if not scope_match["in_scope"]:
         reasons.append("不符合核心主题；缺少：" + "、".join(scope_match["missing_groups"]))
-    if classification is not None:
+    if classification is not None and not strict_publication:
         reasons.extend(apply_policy(paper, classification, relevance, ranking, has_configured_tier=tier is not None))
     if not paper.get("abstract"):
         score = min(score, 72)
@@ -297,13 +299,24 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
             "strong_recommendation_reasons": strong_reasons,
         }
     )
+    ranked["agent_match"] = agent_match(paper, profile.get("agent_priority_terms") or [])
+    if (profile.get("publication_filter") or {}).get("enabled"):
+        if ranking is None:
+            ranked["publication_decision"] = {"status": "pending", "reason": "场所目录不可用"}
+        else:
+            from datetime import date
+            ranked["publication_decision"] = evaluate_publication(paper, profile["publication_filter"], ranking, year=date.today().year)
     return ranked
 
 
 
-def select_review_candidates(ranked: list[dict[str, Any]], limit: int, *, reading_order: str = "score") -> list[dict[str, Any]]:
+def select_review_candidates(ranked: list[dict[str, Any]], limit: int | None = None, *, reading_order: str = "score") -> list[dict[str, Any]]:
     """按日期优先，以主题轮转保证小主题有复核机会；不使用总分硬截断。"""
     eligible = [p for p in ranked if not p["excluded"]]
+    limit = limit or len(eligible)
+    if reading_order == "agent_first":
+        eligible.sort(key=agent_sort_key, reverse=True)
+        return eligible[:limit]
     if reading_order == "venue_first":
         # 先按场所分层，再在每层内轮转主题，低等级不能因轮转抢占 A 类位置。
         selected = []
@@ -348,17 +361,20 @@ def rank_payload(
     *,
     ranking: dict[str, Any] | None = None,
     threshold: int = 70,
-    maximum: int = 10,
-    candidate_limit: int = 100,
+    maximum: int | None = None,
+    candidate_limit: int | None = None,
 ) -> dict[str, Any]:
     papers = extract_papers(payload)
     ranked = [rank_one(paper, profile, ranking) for paper in papers]
     order = profile.get("reading_order", "score")
-    ranked.sort(key=reading_sort_key if order == "venue_first" else lambda item: item["recommendation_score"], reverse=True)
+    ranked.sort(key=agent_sort_key if order == "agent_first" else reading_sort_key if order == "venue_first" else lambda item: item["recommendation_score"], reverse=True)
     ranked.sort(key=lambda item: item["excluded"])
-    recommendations = [
-        item for item in ranked if not item["excluded"] and item["recommendation_score"] >= threshold
-    ][:maximum]
+    strict_venue = (profile.get("publication_filter") or {}).get("enabled", False)
+    recommendations = [item for item in ranked if not item["excluded"] and (
+        (item.get("publication_decision") or {}).get("status") == "eligible" if strict_venue
+        else not item["excluded"] and item["recommendation_score"] >= threshold)]
+    if maximum and not strict_venue:
+        recommendations = recommendations[:maximum]
     return {
         "generated_at": utc_now_iso(),
         "profile_name": clean_text(profile.get("profile_name")),
@@ -372,7 +388,9 @@ def rank_payload(
         "venue_distribution": summarize_queue(recommendations, ranking) if ranking else {},
         "recommendations": recommendations,
         "reading_order": order,
-        "review_candidates": select_review_candidates(ranked, candidate_limit, reading_order=order),
+        "pending_verification": [p for p in ranked if not p["excluded"] and (p.get("publication_decision") or {}).get("status") == "pending"],
+        "publication_exclusions": [p for p in ranked if (p.get("publication_decision") or {}).get("status") == "excluded"],
+        "review_candidates": select_review_candidates([p for p in ranked if (p.get("publication_decision") or {}).get("status") != "excluded"], candidate_limit, reading_order=order),
         "ranked_papers": ranked,
     }
 
@@ -392,10 +410,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--max-results",
-        type=integer_range(1, 50, "篇"),
-        default=10,
-        metavar="1-50",
-        help="最多保留的候选数；默认为10篇",
+        type=integer_range(0, 1000000, "篇"),
+        default=0,
+        metavar="N",
+        help="显式设置上限，默认0不限制；最终场所门槛由配置决定",
     )
     return parser.parse_args(argv)
 

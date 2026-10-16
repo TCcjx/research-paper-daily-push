@@ -2,7 +2,7 @@
 
 prepare 生成的是待填写草稿，不能直接交付。默认 brief；完整摘要后标记 evidence_reviewed。验证器检查结构、一致性和必要证据记录，不能核实链接内容是否支持结论。
 
-根对象：date（YYYY-MM-DD）、report_style（brief/detailed）、term_explanation_mode（off/dual）、metadata、articles（最多10篇且不超过 metadata.maximum）、research_ideas（0–3条）、radar 和 updates。使用 deliver --queue 可附加同次检索的真实元数据；缺失热点数据时报告明确说明，不能自行伪造。
+根对象：date（YYYY-MM-DD）、report_style（brief/detailed）、term_explanation_mode（off/dual）、metadata、articles（默认不限；场所门槛启用时不按 metadata.maximum 截断）、research_ideas（0–3条）、radar 和 updates。使用 deliver --queue 可附加同次检索的真实元数据；缺失热点数据时报告明确说明，不能自行伪造。
 
 配置了主题准入时须保留根对象的 `topic_scope` 和每篇的原始 `abstract`。prepare 自动传递范围；deliver 同时检查当前配置和队列范围，独立摘要脚本也检查随报告携带的范围。题名不足时需从实际阅读的原文补全摘要；阅读理由、标签和“可迁移”说明不能代替研究对象的直接证据。关键词门槛通过后仍须核对：时间机制和知识推理是否为论文实质任务，是否只是背景词。
 
@@ -14,14 +14,16 @@ prepare 生成的是待填写草稿，不能直接交付。默认 brief；完整
 | journal / publication_date / url / article_type | 场所、有效日期、http/https链接、类型 |
 | doi / is_preprint / source_ids | DOI可空；保留来源身份和预印本状态以跟踪更新 |
 | reading_lane | daily 或 supplementary，依据日期，不把旧论文当作今日新增 |
-| recommendation_score | 70–100整数，与分项加权取整一致 |
+| recommendation_score | 0–100整数，与分项加权取整一致；场所门槛启用时无70分下限，旧配置保留旧阈值 |
 | component_scores | relevance、novelty、quality、methodology、inspiration，各0–100整数 |
 | score_status | 必须 evidence_reviewed |
 | why_worth_reading | 100字符内，解释为什么值得研究人员阅读 |
 | core_findings | 1–5条，不能超过可用证据支持的范围 |
 | evidence | 非空数组，记录实际阅读的 URL、kind、supports |
 | assessment | contribution、comparison、limitations、importance、confidence |
-| venue_evidence | venue_first 下已分级正式论文必填：url 为正式论文页面，publication_type 为 full/regular（会议长文）或 journal（期刊） |
+| venue_evidence | 官方记录：venue 规范场所、url 实际论文/录用记录、publication_type（full/regular/journal）、status（accepted/published）、verified=true；URL也须列入evidence |
+| journal_quartiles | 期刊必需：体系、分区、年份、学科、场所和可核实来源，见下例 |
+| agent_assessment | agent_first必需：integrated=true/false；true时role说明具体作用，evidence_url指向本篇已读证据 |
 | research_inspiration | methods、limitations_validation，均为非空数组；其他启发可选 |
 | tags | 1–8个主题标签 |
 | strong_recommendation | 可选；true时必须有 strong_recommendation_reasons |
@@ -45,10 +47,28 @@ prepare 生成的是待填写草稿，不能直接交付。默认 brief；完整
 
 kind 取 abstract/full_text/publisher/repository；supports 必须非空。confidence 取 high/medium/low，描述对当前解读的证据信心，不是论文录用概率。importance 取0–100，与热度分开；未热门也可以重要。不得把摘要中作者声称的提升表述成独立验证。
 
-`metadata.reading_order=venue_first` 时，以已核实场所含金量为主要阅读依据。填写 assessment.contribution_importance（0–100）；deliver 生成 venue_importance、importance_basis=venue_60_contribution_40，以及 importance=round(venue_importance*.6 + contribution_importance*.4)。旧 importance 可兼容用作贡献分；重复生成时保留贡献原值，不重复加权。场所基础分：CCF A/B/C=95/85/74，用户配置期刊一/二/三档=93/84/74，正式未分级=65，未核实=58；均为个人优先级代理分。推荐分仍采用原五项公式，最终报告和前三名先按场所层级排序。
+根对象 `publication_filter` 从配置/队列传递。deliver将未知场所或分区放入 `pending_verification`，不达标放入 `publication_exclusions`，与最近报告重复的放入 `duplicates_not_recommended`，更新进入 updates。独立渲染器重算门槛，不能手填 publication_decision 绕过。待核实和过滤列表保留原因，最终推荐数只统计 articles。
 
-已分级论文的 venue_evidence 必须指向正式论文记录，不能只指向评级目录。会议优先范围为主会 full/regular 长文，附属卷、短文、摘要、海报不继承主会级别。作者自述录用和简称/部分名称匹配仅保留 candidate_ccf（待核实），不能写成已核实 CCF 等级。正式场所核对后填写规范全名及真实论文类型。deliver 会按目录重新匹配，忽略手工伪造的等级标签。
+期刊分区示例（占位符必须换成实际核实记录）：
+
+```json
+"journal_quartiles": [
+  {"system": "jcr", "quartile": 2, "year": 2025, "category": "实际学科",
+   "venue": "实际期刊规范名称", "source_url": "https://example.org/分区记录", "verified": true}
+],
+"venue_evidence": {
+  "venue": "实际期刊规范名称", "url": "https://example.org/实际论文",
+  "publication_type": "journal", "status": "published", "verified": true
+},
+"agent_assessment": {"integrated": false, "role": "", "evidence_url": ""}
+```
+
+system 为 cas 或 jcr，quartile 为1–4，year不晚于报告年份，category须非空，venue须与实际刊物对应。记录具体年份/学科，复核适用版本；CAS一区/二区或JCR Q1/Q2任一已核实达标即可。两套均核实低于门槛才判为不达标；一套未核实且另一套较低则继续待核实，不猜分区。CAS分区不应显示成JCR分区。
+
+会议须核实CCF A/B主会 full/regular 长文。作者自述和简称不足为证，附属卷/短文不继承主会等级。arXiv载体保留is_preprint=true；官方录用/发表记录核实后可按真实场所准入，报告分别展示载体与录用状态。真实论文页面证据不能只用评级目录代替。程序只验证字段与一致性，复核者必须实际核对来源内容。
+
+`agent_first` 排序：经证据确认Agent结合优先，其次参考场所、贡献和日期；两组均无数量配额。填写Agent角色和本篇 evidence 中的URL，LLM或planning关键词本身不足以确认Agent。评分仍需诚实填写，但不再决定准入。兼容 `venue_first` 的场所60%+贡献40%个人重要性代理分，deliver自动计算；它不改变新场所门槛。
 
 默认不要求术语解释。dual 模式的 term_explanations 每项含 term、academic_explanation、plain_explanation，解释各不超过180字符且不同。只解释理解所需关键术语。detailed 模式可额外填 experimental_design、key_entities_mechanisms、target_system、future_direction、paper_potential；不要为凑字段臆造基金或论文潜力。
 
-updates 使用队列中有身份信息的更新记录；它是元数据通知，不是新论文推荐。成功交付后，history_status=update 的旧记录会推进，避免同一出版变化反复通知。推荐列表不得含重复DOI或规范化题名。
+updates 使用队列中有身份信息的更新记录；它是元数据通知，不是新论文推荐。成功交付后，history_status=update 的旧记录会推进，避免同一出版变化反复通知。推荐列表不得含重复DOI、arXiv ID或规范化题名。

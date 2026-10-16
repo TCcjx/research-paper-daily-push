@@ -24,7 +24,9 @@ def init_profile(args) -> None:
             raise ValueError('--topic 格式为 "主题名称=英文短语,同义词"')
         groups.append({"label": label.strip(), "weight": 80, "terms": words})
     profile = {"configured": True, "profile_name": args.name, "source_preset": args.source_preset,
-               "sources": [], "disabled_sources": ["openalex", "crossref"], "topic_scope": {}, "reading_order": "venue_first",
+               "sources": [], "disabled_sources": ["openalex", "crossref"], "topic_scope": {}, "reading_order": "agent_first",
+               "deduplication_scope": "last_report", "agent_priority_terms": ["agent", "agentic", "multi-agent", "智能体"],
+               "publication_filter": {"enabled": True, "conference_min_ccf": "B", "journal_systems": ["cas", "jcr"], "journal_max_quartile": 2},
                "research_context": args.context or "", "priority_questions": [],
                "queries": args.query, "topic_groups": groups, "method_groups": [], "watchlist": [],
                "quality_tiers": {"tier_1": [], "tier_2": [], "tier_3": []},
@@ -45,7 +47,8 @@ def prepare_review(args) -> None:
     if target.exists():
         raise ValueError("草稿已存在，请选用新路径，避免覆盖复核结果")
     articles = []
-    for candidate in queue.get("candidates", [])[:queue.get("metadata", {}).get("maximum", 10)]:
+    maximum = None if (queue.get("publication_filter") or {}).get("enabled") else queue.get("metadata", {}).get("maximum") or None
+    for candidate in queue.get("candidates", [])[:maximum]:
         article = dict(candidate)
         article.update({"score_status": "pending_evidence_review", "chinese_title": "",
                         "why_worth_reading": "", "core_findings": [], "evidence": [],
@@ -53,14 +56,18 @@ def prepare_review(args) -> None:
                                        "comparison": "", "limitations": ""},
                         "research_inspiration": {"methods": [], "limitations_validation": []},
                         "tags": candidate.get("matched_topics") or [], "strong_recommendation": False})
+        if (queue.get("publication_filter") or {}).get("enabled"):
+            article["agent_assessment"] = {"integrated": None, "role": "", "evidence_url": ""}
         articles.append(article)
     draft = {"date": queue["date"], "report_style": "brief", "term_explanation_mode": "off",
              "topic_scope": queue.get("topic_scope", {}),
+             "publication_filter": queue.get("publication_filter", {}),
              "metadata": queue.get("metadata", {}), "radar": queue.get("radar", {}),
              "updates": queue.get("updates_not_for_new_push", []),
+             "duplicates_not_recommended": queue.get("duplicates_not_recommended", []),
              "articles": articles, "research_ideas": []}
     atomic_write_json(target, draft)
-    print(f"待填写复核草稿：{target}。默认预填前几篇供编辑；请检查完整队列后调整入选，未复核草稿不能交付。")
+    print(f"待填写复核草稿：{target}；预填 {len(articles)} 篇，默认不截断。请完成主题、场所与Agent证据复核后交付。")
 
 
 def weekly_report(args) -> None:
