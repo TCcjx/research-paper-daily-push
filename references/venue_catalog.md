@@ -10,7 +10,7 @@
 
 ## 当前覆盖范围
 
-目录有意不完整，只收录与本仓库默认研究方向相关的领域：
+目录有意不完整，目前收录以下领域；项目没有预设研究方向：
 
 | 领域 | 期刊 A/B/C | 会议 A/B/C |
 | --- | --- | --- |
@@ -33,7 +33,7 @@
 
 `classify()` 依次尝试：规范化全名与别名精确匹配 → 去掉通用词后的关键集合重叠不低于 0.8 → 在规范化字符串中按词边界匹配简称。预印本身份优先于一切：期刊字段是 arXiv、bioRxiv、medRxiv 等预印本平台时，不给出 CCF 等级。
 
-以下情况一律算“未核实”，不能作为等级依据，也不能触发 `strong_recommendation`：只匹配到作者自述的录用信息（`journal_reference`、`comment` 等字段）、按简称匹配、名称或简称同时命中期刊与会议条目（此时按较低等级标注并置 `ambiguous` 为真）、题名含 Findings、Workshop 等附属卷标记。附属卷不继承主会等级。
+以下情况一律算“未核实”，不能作为等级依据；强烈推荐需依赖单篇证据，不能依靠未经核实的等级：只匹配到作者自述的录用信息（`journal_reference`、`comment` 等字段）、按简称匹配、名称或简称同时命中期刊与会议条目（此时按较低等级标注并置 `ambiguous` 为真）、题名含 Findings、Workshop 等附属卷标记。附属卷不继承主会等级。
 
 `quality` 分项的取值顺序是：命中目录的等级分 → 作者自述场所的预印本分 → 预印本分 → 命中 `research_profile.json` 中 `quality_tiers` 的分层分 → 正规未收录分 → 场所信息缺失分。目录分与配置分层分同时存在时取较高者，因此人工维护的期刊分层可以覆盖未收录期刊。
 
@@ -49,3 +49,7 @@ print(classify({'journal':'IEEE Transactions on Knowledge and Data Engineering',
 ```
 
 同时检查两条边界：新条目的简称不会在别的 venue 字符串里被误命中（必要时写进 `conflicts`），简称歧义时确实降级。等级目录只影响“认可度”，不能替代论文本身的证据复核。
+
+## 默认策略
+
+当前默认为 label_only，等级仅作背景，不按场所身份排除候选。strong_recommendation_requires_verified_venue 默认为 false，允许证据充分的预印本被重点阅读；依旧必须标注未同行评议。默认关闭累计引用加分，避免把旧论文引用优势混成单篇质量。用户可自行选择 authority_first 或 strict_ccf_or_tier，但会减少前沿召回。

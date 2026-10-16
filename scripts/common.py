@@ -12,6 +12,7 @@ import re
 import sys
 import tempfile
 import time
+from contextlib import contextmanager
 from collections.abc import Callable, Iterable
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -79,6 +80,23 @@ def integer_range(minimum: int, maximum: int, unit: str = "") -> Callable[[str],
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+
+
+@contextmanager
+def workflow_lock(path: str | Path):
+    """防止同一历史/观测文件被并发任务覆盖；崩溃后保留锁供人工检查。"""
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd = os.open(target, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+    except FileExistsError as exc:
+        raise RuntimeError(f"已有任务正在操作此数据：{target}。确认旧任务已退出后再删除锁文件。") from exc
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(f"pid={os.getpid()} started={utc_now_iso()}\n")
+        yield
+    finally:
+        target.unlink(missing_ok=True)
 
 
 def load_json(path: str | Path, default: Any = None) -> Any:
@@ -351,6 +369,8 @@ def merge_papers(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     source_ids = dict(left.get("source_ids") or {})
     source_ids.update(right.get("source_ids") or {})
     merged["source_ids"] = source_ids
+    merged["citation_counts"] = {**(left.get("citation_counts") or {}), **(right.get("citation_counts") or {})}
+    merged["source_updated_at"] = max(left.get("source_updated_at") or "", right.get("source_updated_at") or "")
     merged["citation_count"] = max(int(left.get("citation_count") or 0), int(right.get("citation_count") or 0))
     merged["is_open_access"] = bool(left.get("is_open_access") or right.get("is_open_access"))
     # 同一篇论文常常同时存在预印本记录和正式出版记录；只有在没有正式出版证据时才算预印本。

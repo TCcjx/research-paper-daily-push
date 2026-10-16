@@ -32,17 +32,20 @@ class SearchSourceTests(unittest.TestCase):
                 ["plant cold stress"], date(2026, 8, 31), date(2026, 9, 1)
             )
 
-        self.assertEqual(request.call_count, 2)
+        self.assertEqual(request.call_count, 4)
         queries = [
             parse_qs(urlparse(call.args[0]).query)
             for call in request.call_args_list
         ]
+        self.assertTrue(all(query["sort"] == ["score"] and "cursor" in query for query in queries))
         filters = {query["filter"][0] for query in queries}
         self.assertEqual(
             filters,
             {
                 "from-online-pub-date:2026-08-31,until-online-pub-date:2026-09-01,type:journal-article",
                 "from-pub-date:2026-08-31,until-pub-date:2026-09-01,type:journal-article",
+                "from-online-pub-date:2026-08-31,until-online-pub-date:2026-09-01,type:proceedings-article",
+                "from-pub-date:2026-08-31,until-pub-date:2026-09-01,type:proceedings-article",
             },
         )
         self.assertTrue(

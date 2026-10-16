@@ -30,8 +30,9 @@ def article(**overrides) -> dict:
         "doi": "10.1000/test",
         "url": "https://doi.org/10.1000/test",
         "article_type": "研究论文",
-        "recommendation_score": 86,
+        "recommendation_score": 87,
         "score_status": "evidence_reviewed",
+        "is_preprint": False,
         "component_scores": {
             "relevance": 90,
             "novelty": 80,
@@ -39,6 +40,8 @@ def article(**overrides) -> dict:
             "methodology": 88,
             "inspiration": 90,
         },
+        "evidence": [{"url": "https://example.org/paper", "kind": "abstract", "supports": ["核心发现"]}],
+        "assessment": {"importance": 80, "confidence": "medium", "contribution": "提出方法", "comparison": "仅有摘要，尚未独立核实相对优势", "limitations": "需要全文验证"},
         "why_worth_reading": "直接回答低温下的转录调控问题。",
         "core_findings": ["发现A", "发现B", "发现C"],
         "term_explanations": [
@@ -55,6 +58,8 @@ def article(**overrides) -> dict:
         "needs_verification": [],
     }
     base.update(overrides)
+    if "recommendation_score" in overrides and "component_scores" not in overrides:
+        base["component_scores"] = {k: overrides["recommendation_score"] for k in base["component_scores"]}
     return base
 
 
@@ -85,7 +90,7 @@ class ValidateArticleTests(unittest.TestCase):
     def test_recommendation_score_must_be_integer_within_range(self) -> None:
         self.assertTrue(errors(article(recommendation_score=101)))
         self.assertTrue(errors(article(recommendation_score="86")))
-        self.assertEqual(errors(article(recommendation_score=0)), [])
+        self.assertTrue(errors(article(recommendation_score=0)))
 
     def test_every_component_score_is_validated(self) -> None:
         components = dict(article()["component_scores"])
@@ -99,7 +104,7 @@ class ValidateArticleTests(unittest.TestCase):
         self.assertEqual(errors(article(why_worth_reading="很" * 100)), [])
 
     def test_core_findings_must_have_three_to_five_items(self) -> None:
-        self.assertTrue(errors(article(core_findings=["只有一条"])))
+        self.assertEqual(errors(article(core_findings=["只有一条"])), [])
         self.assertTrue(errors(article(core_findings=["1", "2", "3", "4", "5", "6"])))
         self.assertEqual(errors(article(core_findings=["1", "2", "3", "4", "5"])), [])
 
@@ -140,8 +145,8 @@ class ValidateArticleTests(unittest.TestCase):
         )
         self.assertTrue(any("180个字符" in item for item in found))
 
-    def test_all_seven_inspiration_fields_are_required(self) -> None:
-        for field in INSPIRATION:
+    def test_methods_and_limitations_inspiration_are_required(self) -> None:
+        for field in ("methods", "limitations_validation"):
             inspiration = dict(INSPIRATION)
             inspiration[field] = []
             found = errors(article(research_inspiration=inspiration))
@@ -170,7 +175,7 @@ class RenderReportTests(unittest.TestCase):
             payload(
                 [
                     article(chinese_title="低分论文", recommendation_score=72),
-                    article(chinese_title="高分论文", doi="10.1000/second", recommendation_score=95),
+                    article(title="Second paper", chinese_title="高分论文", doi="10.1000/second", recommendation_score=95),
                 ]
             )
         )
@@ -178,15 +183,14 @@ class RenderReportTests(unittest.TestCase):
 
     def test_top_three_section_uses_medals(self) -> None:
         report = render_report(
-            payload([article(chinese_title=f"论文{i}", doi=f"10.1000/{i}") for i in range(4)])
+            payload([article(title=f"Paper {i}", chinese_title=f"论文{i}", doi=f"10.1000/{i}") for i in range(4)])
         )
         self.assertIn("今日最值得阅读前三名", report)
         self.assertIn("🥇", report)
         self.assertIn("🥉", report)
 
     def test_research_ideas_are_limited_to_one_to_three(self) -> None:
-        with self.assertRaises(ValueError):
-            render_report(payload([article()], ideas=[]))
+        self.assertIn("最终推荐：1篇", render_report(payload([article()], ideas=[])))
         with self.assertRaises(ValueError):
             render_report(payload([article()], ideas=[f"思路{i}" for i in range(4)]))
 

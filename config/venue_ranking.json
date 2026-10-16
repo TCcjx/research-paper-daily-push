@@ -23,25 +23,12 @@
     "venue_missing": 48,
     "preprint": 58,
     "preprint_with_reported_venue": 72,
-    "citation_bonuses": [
-      [
-        200,
-        8
-      ],
-      [
-        50,
-        5
-      ],
-      [
-        10,
-        2
-      ]
-    ],
+    "citation_bonuses": [],
     "review_article_cap": 82,
     "abstract_missing_penalty": 15
   },
   "policy": {
-    "mode": "authority_first",
+    "mode": "label_only",
     "modes": {
       "label_only": "只标注等级与来源，不额外排除论文。",
       "authority_first": "预印本和未收录 venue 只有在相关性达到阈值时才进入复核队列。",
@@ -49,7 +36,7 @@
     },
     "preprint_min_relevance": 85,
     "unlisted_venue_min_relevance": 80,
-    "strong_recommendation_requires_verified_venue": true
+    "strong_recommendation_requires_verified_venue": false
   },
   "labels": {
     "ccf_journal": "CCF-{ccf} 期刊",

@@ -14,3 +14,8 @@ data/runs/
 .DS_Store
 Thumbs.db
 *.swp
+
+# 观测快照、并发锁与个人研究配置
+data/observations.json
+data/*.lock
+config/*.local.json

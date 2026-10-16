@@ -161,9 +161,9 @@ class OpenAlexSearchTests(unittest.TestCase):
             search_papers.search_openalex,
         )
 
-    def test_daily_collection_does_not_enable_openalex_by_default(self) -> None:
+    def test_daily_collection_resolves_sources_from_profile(self) -> None:
         args = run_daily.parse_args(["collect"])
-        self.assertNotIn("openalex", args.sources.split(","))
+        self.assertEqual(args.sources, "auto")
 
     def test_cursor_pagination_follows_next_cursor(self) -> None:
         def work(identifier: str) -> dict[str, object]:

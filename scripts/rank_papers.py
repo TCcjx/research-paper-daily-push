@@ -38,42 +38,9 @@ WEIGHTS = {
     "inspiration": 0.10,
 }
 
-DEFAULT_METHOD_GROUPS: list[dict[str, Any]] = [
-    {
-        "label": "multi_source_or_multiomics",
-        "terms": ("multi-omics", "multiomics", "integrative analysis", "multi-source", "data integration"),
-    },
-    {
-        "label": "single_cell_or_spatial",
-        "terms": ("single-cell", "single cell", "single-nucleus", "single nucleus", "spatial transcriptomics", "spatial omics"),
-    },
-    {
-        "label": "causal_or_functional_validation",
-        "terms": ("randomized controlled", "knockout", "overexpression", "complementation", "perturbation", "gene editing", "causal inference"),
-    },
-    {
-        "label": "independent_validation",
-        "terms": ("independent validation", "external validation", "replication cohort", "validation cohort", "held-out dataset"),
-    },
-    {
-        "label": "longitudinal_or_time_series",
-        "terms": ("longitudinal", "time course", "time-course", "time series", "time-series", "prospective"),
-    },
-    {
-        "label": "population_or_large_scale",
-        "terms": ("population-scale", "population based", "genome-wide", "multicenter", "multi-center", "large-scale dataset"),
-    },
-    {
-        "label": "network_or_systems_analysis",
-        "terms": ("network analysis", "regulatory network", "co-expression network", "systems biology", "systems-level"),
-    },
-]
-
-DEFAULT_QUALITY_TIERS = {
-    "tier_1": {"nature", "science", "cell", "proceedings of the national academy of sciences", "nature communications"},
-    "tier_2": set(),
-    "tier_3": set(),
-}
+# 方法词表由领域配置提供；不把某一学科的实验手段默认用于所有领域。
+DEFAULT_METHOD_GROUPS: list[dict[str, Any]] = []
+DEFAULT_QUALITY_TIERS = {"tier_1": set(), "tier_2": set(), "tier_3": set()}
 
 EXCLUDE_TYPES = (
     "editorial", "correction", "erratum", "retraction", "conference abstract", "letter to the editor"
@@ -217,7 +184,7 @@ def exclusion_reasons(paper: dict[str, Any], text: str, relevance: int, profile:
     reasons: list[str] = []
     article_type = clean_text(paper.get("article_type")).casefold()
     title = clean_text(paper.get("title")).casefold()
-    if contains_any(article_type, EXCLUDE_TYPES) or contains_any(title, EXCLUDE_TYPES):
+    if contains_any(article_type, EXCLUDE_TYPES) or re.match(r"^(?:retraction|retracted|correction|erratum|editorial)\s*:", title):
         reasons.append("非研究性文章、勘误或撤稿类内容")
     if relevance < 35:
         reasons.append("与已配置研究方向关系过弱")
@@ -300,6 +267,7 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
         {
             "recommendation_score": score,
             "score_status": "preliminary_metadata_score",
+            "score_limitations": ["创新性尚未与已有工作比较", "方法关键词缺失不等于方法差", "场所等级不等于单篇论文质量"],
             "component_scores": component_scores,
             "score_weights": WEIGHTS,
             "matched_topics": topics,
@@ -323,6 +291,32 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
     return ranked
 
 
+
+def select_review_candidates(ranked: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+    """按日期优先，以主题轮转保证小主题有复核机会；不使用总分硬截断。"""
+    eligible = [p for p in ranked if not p["excluded"]]
+    eligible.sort(key=lambda p: (p.get("publication_date", ""), p.get("component_scores", {}).get("relevance", 0), p["recommendation_score"]), reverse=True)
+    buckets: dict[str, list[dict]] = {}
+    for p in eligible:
+        labels = p.get("matched_topics") or ["其他"]
+        for label in labels:
+            buckets.setdefault(label, []).append(p)
+    selected, seen = [], set()
+    while buckets and len(selected) < limit:
+        for label in list(buckets):
+            bucket = buckets[label]
+            while bucket and id(bucket[0]) in seen:
+                bucket.pop(0)
+            if not bucket:
+                del buckets[label]
+                continue
+            p = bucket.pop(0)
+            selected.append(p)
+            seen.add(id(p))
+            if len(selected) >= limit:
+                break
+    return selected
+
 def rank_payload(
     payload: Any,
     profile: dict[str, Any],
@@ -330,6 +324,7 @@ def rank_payload(
     ranking: dict[str, Any] | None = None,
     threshold: int = 70,
     maximum: int = 10,
+    candidate_limit: int = 50,
 ) -> dict[str, Any]:
     papers = extract_papers(payload)
     ranked = [rank_one(paper, profile, ranking) for paper in papers]
@@ -345,10 +340,11 @@ def rank_payload(
         "screened_count": len(ranked),
         "recommended_count": len(recommendations),
         "formula": "relevance*0.40 + novelty*0.20 + quality*0.15 + methodology*0.15 + inspiration*0.10",
-        "important_note": "分数是配置驱动的元数据初筛分；最终推送前必须阅读可用证据并重新评价各分项。",
+        "important_note": "分数仅是元数据代理指标，不是创新性、重要性或热度的证据；低于70分仍可进入广泛复核池。",
         "authority_policy": (ranking.get("policy") or {}) if ranking else {},
         "venue_distribution": summarize_queue(recommendations, ranking) if ranking else {},
         "recommendations": recommendations,
+        "review_candidates": select_review_candidates(ranked, candidate_limit),
         "ranked_papers": ranked,
     }
 

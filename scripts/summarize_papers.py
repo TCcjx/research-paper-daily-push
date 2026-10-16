@@ -5,21 +5,15 @@ from __future__ import annotations
 
 import argparse
 import math
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
-from common import ChineseArgumentParser, clean_text, load_json, normalize_doi
+from common import ChineseArgumentParser, clean_text, load_json, normalize_doi, normalize_title, looks_like_preprint
 
-REQUIRED_INSPIRATION = (
-    "experimental_design",
-    "methods",
-    "key_entities_mechanisms",
-    "target_system",
-    "future_direction",
-    "paper_potential",
-    "limitations_validation",
-)
+REQUIRED_INSPIRATION = ("methods", "limitations_validation")
+
 
 VENUE_STATUSES = {
     "ccf_listed",
@@ -59,6 +53,13 @@ def _venue_line(article: dict[str, Any]) -> str:
     return f"- 认可度/等级：{label}" + (f"（{notes[0]}）" if notes else "")
 
 
+def valid_url(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    parsed = urlparse(value)
+    return parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+
+
 def validate_article(
     article: dict[str, Any], index: int, strict: bool, require_term_explanations: bool
 ) -> list[str]:
@@ -68,12 +69,23 @@ def validate_article(
         if not clean_text(article.get(field)):
             errors.append(f"{prefix}.{field} 为必填字段")
     score = article.get("recommendation_score")
-    if not isinstance(score, int) or not 0 <= score <= 100:
+    if type(score) is not int or not 0 <= score <= 100:
         errors.append(f"{prefix}.recommendation_score 必须是0到100之间的整数")
+    if strict and type(score) is int and score < 70:
+        errors.append(f"{prefix}.recommendation_score 低于70分推荐下限")
+    try:
+        date.fromisoformat(article.get("publication_date", ""))
+    except (ValueError, TypeError):
+        errors.append(f"{prefix}.publication_date 必须是有效的 YYYY-MM-DD 日期")
+    if not valid_url(article.get("url")):
+        errors.append(f"{prefix}.url 必须是 http/https 链接")
     component_scores = article.get("component_scores") or {}
+    if not isinstance(component_scores, dict):
+        errors.append(f"{prefix}.component_scores 必须是对象")
+        component_scores = {}
     for field in ("relevance", "novelty", "quality", "methodology", "inspiration"):
         value = component_scores.get(field)
-        if not isinstance(value, int) or not 0 <= value <= 100:
+        if type(value) is not int or not 0 <= value <= 100:
             errors.append(f"{prefix}.component_scores.{field} 必须是0到100之间的整数")
     why = clean_text(article.get("why_worth_reading"))
     if not why:
@@ -81,8 +93,8 @@ def validate_article(
     elif len(why) > 100:
         errors.append(f"{prefix}.why_worth_reading 超过100个字符")
     findings = _list(article.get("core_findings"))
-    if not 3 <= len(findings) <= 5:
-        errors.append(f"{prefix}.core_findings 必须包含3–5条受证据约束的要点")
+    if not 1 <= len(findings) <= 5:
+        errors.append(f"{prefix}.core_findings 必须包含1–5条受证据约束的要点")
     terms = _term_explanations(article.get("term_explanations"))
     if require_term_explanations and not terms:
         errors.append(f"{prefix}.term_explanations 必须覆盖本篇论文中使用的专业术语")
@@ -118,6 +130,33 @@ def validate_article(
                 errors.append(f"{prefix}.research_inspiration.{field} 为必填字段")
     if not 1 <= len(_list(article.get("tags"))) <= 8:
         errors.append(f"{prefix}.tags 必须包含1–8个聚焦标签")
+    if strict:
+        if type(article.get("is_preprint")) is not bool:
+            errors.append(f"{prefix}.is_preprint 必须明确为布尔值，保留预印本身份")
+        elif not article["is_preprint"] and looks_like_preprint(article):
+            errors.append(f"{prefix}.is_preprint 与预印本场所矛盾")
+        evidence = article.get("evidence")
+        if not isinstance(evidence, list) or not evidence:
+            errors.append(f"{prefix}.evidence 必须记录实际阅读的证据链接")
+        else:
+            for item in evidence:
+                if not isinstance(item, dict) or not valid_url(item.get("url")) or item.get("kind") not in {"abstract", "full_text", "publisher", "repository"} or not _list(item.get("supports")):
+                    errors.append(f"{prefix}.evidence 每项须包含有效 url、kind 与 supports")
+        assessment = article.get("assessment") or {}
+        if not isinstance(assessment, dict):
+            assessment = {}
+        for field in ("contribution", "comparison", "limitations"):
+            if not clean_text(assessment.get(field)):
+                errors.append(f"{prefix}.assessment.{field} 必填；未完成对比需如实说明")
+        if type(assessment.get("importance")) is not int or not 0 <= assessment["importance"] <= 100:
+            errors.append(f"{prefix}.assessment.importance 必须是0–100整数，与热度分开评价")
+        if assessment.get("confidence") not in {"high", "medium", "low"}:
+            errors.append(f"{prefix}.assessment.confidence 必须是 high/medium/low")
+        weights = {"relevance": .4, "novelty": .2, "quality": .15, "methodology": .15, "inspiration": .1}
+        if all(type(component_scores.get(k)) is int for k in weights):
+            expected = round(sum(component_scores[k] * w for k, w in weights.items()))
+            if score != expected:
+                errors.append(f"{prefix}.recommendation_score 与分项加权结果 {expected} 不一致")
     if strict and article.get("score_status") != "evidence_reviewed":
         errors.append(f"Codex 核对摘要或全文后，{prefix}.score_status 必须设为 evidence_reviewed")
     if article.get("venue_ranking") is not None:
@@ -154,12 +193,38 @@ def line_items(values: Any, prefix: str = "- ") -> list[str]:
     return [f"{prefix}{item}" for item in _list(values)]
 
 
-def render_article(article: dict[str, Any], rank: int) -> str:
+def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -> str:
     strong = bool(article.get("strong_recommendation"))
     heading = f"### {rank}. {clean_text(article['chinese_title'])}"
     if strong:
         heading += "　🔥 **强烈推荐**"
     doi = normalize_doi(article.get("doi")) or "暂无/需核实"
+    if not detailed:
+        assessment = article.get("assessment") or {}
+        confidence = {"high": "高", "medium": "中", "low": "低"}.get(assessment.get("confidence"), "待核实")
+        lane = {"daily": "当日候选", "supplementary": "近期补充"}.get(article.get("reading_lane"), "时间归类待核对")
+        preprint = "｜预印本，未经正式同行评议" if article.get("is_preprint") or "preprint" in article.get("article_type", "").lower() else ""
+        lines = [heading, "", f"[{clean_text(article['title'])}]({article['url']})", "",
+                 f"{article['journal']}｜{article['publication_date']}｜{lane}{preprint}",
+                 f"推荐 {article['recommendation_score']}/100｜重要性 {assessment.get('importance', '待核实')}/100｜证据置信度：{confidence}",
+                 "", f"**为什么值得读：** {article['why_worth_reading']}",
+                 f"**主要贡献：** {assessment.get('contribution', '需要核实')}",
+                 f"**相较已有工作：** {assessment.get('comparison', '尚未完成独立对比')}", ""]
+        signal = article.get("attention_signals") or {}
+        if signal.get("status") == "observed":
+            changes = "; ".join(f"{source} {delta:+d}" for source, delta in signal.get("citation_deltas", {}).items())
+            lines.append(f"**关注度辅助证据：** {signal['interval_days']}天内同源引用数变化：{changes}；存在索引延迟。")
+        else:
+            lines.append("**关注度辅助证据：** 暂无可比引用快照，热度未知。")
+        lines += line_items(article.get("core_findings"))
+        lines += ["", f"**局限：** {assessment.get('limitations', '需要核实')}",
+                  "**可借鉴方法：** " + "; ".join(_list((article.get("research_inspiration") or {}).get("methods")))]
+        if strong:
+            lines += ["**强烈推荐依据：** " + "; ".join(_list(article.get("strong_recommendation_reasons")))]
+        for item in article.get("evidence", []):
+            lines.append(f"- 证据（{item['kind']}）：[{'; '.join(_list(item['supports']))}]({item['url']})")
+        lines += ["", "**重点标记：** " + " ".join(_list(article.get("tags")))]
+        return "\n".join(lines)
     components = article.get("component_scores") or {}
     tags = " ".join(
         tag if str(tag).startswith("#") else f"#{clean_text(tag).replace(' ', '')}"
@@ -211,15 +276,21 @@ def render_article(article: dict[str, Any], rank: int) -> str:
         "limitations_validation": "局限与验证需求",
     }
     inspiration = article["research_inspiration"]
-    for field in REQUIRED_INSPIRATION:
+    for field in labels:
         value = "；".join(_list(inspiration.get(field)))
-        sections.append(f"- **{labels[field]}：** {value}")
+        if value:
+            sections.append(f"- **{labels[field]}：** {value}")
     if strong:
         sections.extend(["", "**🔥 强烈推荐理由**", ""])
         sections.extend(line_items(article.get("strong_recommendation_reasons")))
     verification = _list(article.get("needs_verification"))
     if verification:
         sections.extend(["", "**需核实：** " + "；".join(verification)])
+    for evidence in article.get("evidence", []):
+        sections.append(f"- 证据（{evidence['kind']}）：[{'; '.join(_list(evidence['supports']))}]({evidence['url']})")
+    assessment = article.get("assessment") or {}
+    sections += [f"**相较已有工作：** {assessment.get('comparison', '需要核实')}",
+                 f"**证据置信度：** {assessment.get('confidence', '需要核实')}｜重要性：{assessment.get('importance', '待核实')}/100"]
     sections.extend(["", f"**重点标记：** {tags}"])
     return "\n".join(sections)
 
@@ -257,11 +328,67 @@ def render_venue_distribution(distribution: Any) -> str:
     return line + (f"  \n说明：{note}" if note else "")
 
 
+def render_radar(radar: dict) -> list[str]:
+    lines = ["## 研究热点线索", "", radar.get("limitations", "尚无可比趋势样本；不根据论文题名推断领域热度。"), ""]
+    names = {"rising": "样本发文升温", "emerging_sample": "样本新出现，需继续观察",
+             "no_clear_rise": "未见明确升温", "insufficient_data": "数据不足/样本不完整"}
+    for topic in radar.get("topics", [])[:8]:
+        ratio = topic.get("daily_rate_ratio")
+        lines.append(f"- **{topic['topic']}**：{names[topic['status']]}。近7天 {topic['recent_count']} 篇，前 {topic['baseline_days']} 天 {topic['baseline_count']} 篇；日均比值 {ratio if ratio is not None else '不可计算'}。")
+        for evidence in topic.get("evidence", [])[:2]:
+            lines.append(f"  - [{evidence['title']}]({evidence['url']})")
+    return lines + [""]
+
+
+def render_updates(updates: list) -> list[str]:
+    lines = ["## 持续跟踪", ""]
+    if not updates:
+        return lines + ["本次检索样本中暂无已识别的更新；未覆盖的旧论文仍可能有新进展。", ""]
+    seen = set()
+    for item in updates:
+        marker = (item.get("title"), item.get("url"))
+        if marker in seen:
+            continue
+        seen.add(marker)
+        changes = item.get("changes") or item.get("updated_fields") or ["元数据更新"]
+        lines.append(f"- [{item.get('title')}]({item.get('url')})：{', '.join(changes)}（元数据信号，实质结论需复核）。")
+    return lines + [""]
+
+
+def render_discovery(queue: dict) -> str:
+    metadata = queue["metadata"]
+    lines = ["# 科研论文发现简报（未复核）", "", f"日期：{queue['date']}",
+             f"检索窗口：{metadata['window']}", f"趋势样本：{metadata['trend_window']}", "",
+             "以下为检索元数据和待复核候选，不能视为重点论文推荐或已验证研究结论。", ""]
+    lines += [f"> {w}" for w in metadata.get("warnings", [])]
+    lines += render_radar(queue.get("radar") or {})
+    lines += render_updates(queue.get("updates_not_for_new_push", []) + (queue.get("radar") or {}).get("observed_updates", []))
+    for lane, name in (("daily", "当日待复核"), ("supplementary", "近期补充待复核")):
+        lines += [f"## {name}", ""]
+        papers = [p for p in queue.get("candidates", []) if p.get("reading_lane") == lane]
+        if not papers:
+            lines += ["暂无符合初筛条件的候选。", ""]
+        for p in papers:
+            review = "预印本，未经正式同行评议" if p.get("is_preprint") else "正式出版记录，单篇质量待复核"
+            lines += [f"- [{p['title']}]({p.get('url', '')})｜{p.get('publication_date', '')}｜{review}",
+                      f"  - 初筛代理分 {p['recommendation_score']}；主题：{', '.join(p.get('matched_topics', []))}"]
+    return "\n".join(lines).rstrip() + "\n"
+
+
 def render_report(payload: dict[str, Any], strict: bool = True) -> str:
-    articles = payload.get("articles") or []
+    articles = payload.get("articles", [])
     if not isinstance(articles, list):
         raise TypeError("articles 必须是数组")
     errors: list[str] = []
+    if not isinstance(payload.get("metadata", {}), dict):
+        raise TypeError("metadata 必须是对象")
+    if payload.get("report_style", "brief") not in {"brief", "detailed"}:
+        errors.append("report_style 必须是 brief/detailed")
+    if strict:
+        try:
+            date.fromisoformat(payload.get("date", ""))
+        except (TypeError, ValueError):
+            errors.append("date 必须是有效的 YYYY-MM-DD 日期")
     require_term_explanations = clean_text(payload.get("term_explanation_mode")).casefold() == "dual"
     for index, article in enumerate(articles):
         if not isinstance(article, dict):
@@ -269,10 +396,26 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         else:
             errors.extend(validate_article(article, index, strict, require_term_explanations))
     ideas = _list(payload.get("research_ideas"))
-    if articles and not 1 <= len(ideas) <= 3:
-        errors.append("research_ideas 必须包含1–3个以证据为基础的研究思路")
+    if len(ideas) > 3:
+        errors.append("research_ideas 最多包含3个以证据为基础的研究思路")
+    maximum = (payload.get("metadata") or {}).get("maximum", 10)
+    if type(maximum) is not int or not 1 <= maximum <= 10:
+        errors.append("metadata.maximum 必须是1–10整数")
+    elif strict and len(articles) > maximum:
+        errors.append(f"articles 超出本次推荐上限 {maximum}")
     if strict and not 0 <= len(articles) <= 10:
         errors.append("articles 最多只能包含10篇论文")
+    seen_dois, seen_titles = set(), set()
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+        doi, title = normalize_doi(article.get("doi")), normalize_title(article.get("title"))
+        if (doi and doi in seen_dois) or (title and title in seen_titles):
+            errors.append("articles 含有重复 DOI 或规范化题名")
+        if doi:
+            seen_dois.add(doi)
+        if title:
+            seen_titles.add(title)
     if errors:
         raise ValueError("已复核数据验证失败：\n- " + "\n- ".join(errors))
 
@@ -290,6 +433,9 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         f"最终推荐：{len(articles)}篇",
         "",
     ]
+    parts += [f"检索窗口：{metadata.get('window', '未提供，需核实')}", ""]
+    parts += render_radar(payload.get("radar") or {})
+    parts += render_updates(payload.get("updates") or [])
     venue_summary = render_venue_distribution(metadata.get("venue_distribution"))
     if venue_summary:
         parts.extend([venue_summary, ""])
@@ -310,7 +456,8 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         ])
         return "\n".join(parts).rstrip() + "\n"
 
-    parts.append("\n\n---\n\n".join(render_article(article, rank) for rank, article in enumerate(articles, 1)))
+    parts.extend(["## 今日重点论文（含单独标注的近期补充）", ""])
+    parts.append("\n\n---\n\n".join(render_article(article, rank, detailed=payload.get("report_style") == "detailed" or require_term_explanations) for rank, article in enumerate(articles, 1)))
     parts.extend(["", "## 今日最值得阅读前三名", ""])
     medals = ("🥇", "🥈", "🥉")
     ordinals = ("第一篇", "第二篇", "第三篇")

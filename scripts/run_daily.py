@@ -6,7 +6,7 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +17,15 @@ from common import (
     load_json,
     utc_now_iso,
 )
-from profile_config import DEFAULT_PROFILE, ProfileError, load_profile
+from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, profile_queries, profile_terms, profile_sources
+from search_papers import collect
+from deduplicate import filter_history, load_history
+from rank_papers import rank_payload, select_review_candidates
+from venue_ranking import load_ranking, DEFAULT_RANKING
+from research_radar import analyze
+from common import paper_key, deduplicate_papers, workflow_lock, normalize_doi, normalize_title
+from watch_papers import check_watchlist
+from project_cli import add_commands, init_profile, prepare_review, weekly_report
 from update_research_memory import build_context, load_memory
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -33,88 +41,87 @@ def run_script(name: str, *arguments: str) -> None:
 
 
 def collect_stage(args: argparse.Namespace) -> Path:
-    today = datetime.now().astimezone().date().isoformat()
-    output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_RUNS / today
+    today = args.to_date or datetime.now().astimezone().date().isoformat()
+    end = datetime.fromisoformat(today).date()
+    profile = load_profile(args.profile)
+    sources = profile_sources(profile, args.sources)
+    queries = profile_queries(profile, args.mode)
+    from research_radar import scope_key
+    output_dir = Path(args.output_dir) if args.output_dir else DEFAULT_RUNS / scope_key(profile, queries, sources) / today
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    def execute_window(label: str, days: int) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-        raw_path = output_dir / f"search_{label}.json"
-        fresh_path = output_dir / f"deduplicated_{label}.json"
-        ranked_path = output_dir / f"ranked_{label}.json"
-        run_script(
-            "search_papers.py",
-            "--days", str(days),
-            "--mode", args.mode,
-            "--profile", str(args.profile),
-            "--sources", args.sources,
-            "--output", str(raw_path),
-        )
-        run_script(
-            "deduplicate.py",
-            "filter",
-            "--input", str(raw_path),
-            "--output", str(fresh_path),
-            "--history", str(args.history),
-        )
-        run_script(
-            "rank_papers.py",
-            "--input", str(fresh_path),
-            "--output", str(ranked_path),
-            "--profile", str(args.profile),
-            "--threshold", str(args.threshold),
-            "--max-results", str(args.max_results),
-        )
-        return load_json(raw_path, {}), load_json(fresh_path, {}), load_json(ranked_path, {})
-
-    # 多数学术接口只提供日级出版日期，而不是精确时间戳。
-    # 因此以今天和昨天构成候选池，再由 Codex 优先复核可能位于近24小时内的论文。
-    raw, fresh, ranked = execute_window("24h", 2)
-    used_window = "近24小时优先（按来源可用的日级日期，候选池覆盖今天和昨天）"
-    # 扩窗阶梯：24小时池的高分候选不足 min_results 时逐级放大窗口，
-    # 在不降低阈值的前提下尽量凑足候选；窗口上限 30 天，仍不足时如实输出。
-    for days in (7, 14, 30):
-        if int(ranked.get("recommended_count") or 0) >= args.min_results:
-            break
-        raw, fresh, ranked = execute_window(f"{days}d", days)
-        used_window = f"最近{days}天（因高分候选不足{args.min_results}篇而逐级扩大）"
-
-    source_errors = raw.get("errors") or []
-    warnings = [f"{item.get('source')}: {item.get('error')}" for item in source_errors]
-    if fresh.get("update_count"):
-        warnings.append(f"发现 {fresh['update_count']} 篇已推送论文的出版信息更新；不作为新论文重复推荐")
-    queue = {
-        "generated_at": utc_now_iso(),
-        "date": today,
-        "mode": args.mode,
-        "profile_name": raw.get("profile_name") or "",
-        "metadata": {
-            "window": used_window,
-            "retrieved_count": int(raw.get("retrieved_count") or 0),
-            "unique_relevant_count": int(raw.get("unique_relevant_count") or 0),
-            "new_after_history_count": int(fresh.get("new_count") or 0),
-            "screened_count": int(ranked.get("screened_count") or 0),
-            "preliminary_recommended_count": int(ranked.get("recommended_count") or 0),
-            "threshold": args.threshold,
-            "maximum": args.max_results,
-            "source_counts": raw.get("source_counts") or {},
-            "venue_distribution": ranked.get("venue_distribution") or {},
-            "authority_policy": ranked.get("authority_policy") or {},
-            "warnings": warnings,
-        },
-        "review_requirement": (
-            "这些是元数据初筛候选，不是最终推送结果。Codex 必须阅读可用摘要，并在重要结论不充分时核对出版商页面/全文；"
-            "逐项复核评分，核对 venue_ranking 给出的发表场所等级（未命中目录时只能标“需要核实”，不得臆造等级），"
-            "排除证据不足或弱相关论文，再写入 reviewed_articles.json。"
-        ),
-        "research_memory_context": build_context(load_memory(args.memory), recent=10),
-        "scoring_formula": ranked.get("formula"),
-        "candidates": ranked.get("recommendations") or [],
-        "updates_not_for_new_push": fresh.get("updates") or [],
-    }
     queue_path = output_dir / "review_queue.json"
+    try:
+        # 一次取30天样本，再本地切窗。避免每次扩窗重复请求同一批论文。
+        raw = collect(queries=queries, start=end - timedelta(days=29), end=end,
+                      sources=sources, relevance_terms=profile_terms(profile))
+    except Exception as exc:
+        atomic_write_json(queue_path, {"status": "failed", "date": today,
+                                      "error": str(exc), "candidates": []})
+        (output_dir / "discovery.md").write_text(f"# 本次检索失败\n\n日期：{today}\n\n{exc}\n\n没有生成成功的零推荐报告，请排查后重试。\n", encoding="utf-8")
+        raise
+    raw["profile_name"] = profile.get("profile_name", "")
+    atomic_write_json(output_dir / "search_30d.json", raw)
+    ranking = load_ranking(args.ranking)
+    history = load_history(args.history)
+    watched, watch_errors = check_watchlist((profile.get("watchlist") or []) + list(reversed(history)), args.watch_limit)
+    fresh = filter_history(raw["papers"], history)
+    watched_updates = filter_history(watched, history)["updates"]
+    fresh["updates"] = deduplicate_papers(fresh["updates"] + watched_updates)
+    observation_raw = {**raw, "papers": deduplicate_papers(raw["papers"] + [{**p, "_watch_only": True} for p in watched])}
+    radar, state = analyze(observation_raw, profile, load_json(args.observations, {}), today=today)
+    all_ranked = rank_payload({"papers": fresh["new"]}, profile, ranking=ranking,
+                              threshold=args.threshold, maximum=args.max_results,
+                              candidate_limit=args.candidate_limit)
+    eligible = [p for p in all_ranked["ranked_papers"] if not p["excluded"]]
+    recent_start = (end - timedelta(days=1)).isoformat()
+    recent = [p for p in eligible if recent_start <= p.get("publication_date", "") <= today]
+    used_days = 2
+    pool = recent
+    for days in (7, 14, 30):
+        if len(pool) >= args.min_results:
+            break
+        used_days = days
+        cutoff = (end - timedelta(days=days-1)).isoformat()
+        pool = [p for p in eligible if cutoff <= p.get("publication_date", "") <= today]
+    # 当日与近期补充各自选取，旧论文不能挤掉当天候选。
+    candidates = select_review_candidates(recent, args.candidate_limit)
+    recent_keys = {paper_key(p) for p in candidates}
+    candidates += select_review_candidates([p for p in pool if paper_key(p) not in recent_keys],
+                                           args.candidate_limit - len(candidates))
+    for p in candidates:
+        p["reading_lane"] = "daily" if p.get("publication_date", "") >= recent_start else "supplementary"
+        p["attention_signals"] = radar["paper_signals"].get(paper_key(p), {})
+    warnings = [f"{e['source']}: {e['error']}" for e in raw.get("errors", [])]
+    warnings += raw.get("coverage_warnings", []) + watch_errors
+    if len(eligible) > len(candidates):
+        warnings.append(f"本次有 {len(eligible)} 篇可复核论文，预算内展示 {len(candidates)} 篇；其余可在 ranked_30d.json 检查")
+    used_window = ("近24小时优先（按日级日期，候选池覆盖今天和昨天）" if used_days == 2
+                   else f"最近{used_days}天（相关候选不足{args.min_results}篇，近期补充单独标注）")
+    queue = {
+        "status": raw.get("status", "ok"), "generated_at": utc_now_iso(), "date": today,
+        "mode": args.mode, "profile_name": profile.get("profile_name", ""),
+        "metadata": {"window": used_window, "trend_window": f"{raw['date_from']} 至 {today}",
+                     "retrieved_count": raw["retrieved_count"], "unique_relevant_count": raw["unique_relevant_count"],
+                     "new_after_history_count": fresh["new_count"],
+                     "screened_count": all_ranked["screened_count"],
+                     "preliminary_recommended_count": all_ranked["recommended_count"],
+                     "candidate_count": len(candidates), "threshold": args.threshold,
+                     "maximum": args.max_results, "source_counts": raw["source_counts"],
+                     "sources_requested": sources, "warnings": warnings,
+                     "authority_policy": all_ranked["authority_policy"]},
+        "review_requirement": "这些是广泛复核候选，不是最终推送结果。阅读摘要或全文，记录证据链接及与已有工作的比较；重要性与热度分开判断。",
+        "research_memory_context": build_context(load_memory(args.memory), recent=10),
+        "radar": radar, "candidates": candidates,
+        "updates_not_for_new_push": fresh["updates"],
+    }
+    atomic_write_json(output_dir / "ranked_30d.json", all_ranked)
     atomic_write_json(queue_path, queue)
+    atomic_write_json(args.observations, state)
+    # 同时输出可直接阅读的简报；它不是经过证据复核的精选推荐。
+    from summarize_papers import render_discovery
+    (output_dir / "discovery.md").write_text(render_discovery(queue), encoding="utf-8")
     print(f"复核队列已生成：{queue_path}")
-    print(f"检索窗口：{used_window}；候选论文：{len(queue['candidates'])} 篇")
+    print(f"检索窗口：{used_window}；候选论文：{len(candidates)} 篇；未复核简报：{output_dir / 'discovery.md'}")
     return queue_path
 
 
@@ -122,6 +129,31 @@ def deliver_stage(args: argparse.Namespace) -> Path:
     reviewed_path = Path(args.reviewed)
     report_path = Path(args.report)
     report_path.parent.mkdir(parents=True, exist_ok=True)
+    reviewed_payload = load_json(reviewed_path, {})
+    if not isinstance(reviewed_payload, dict):
+        raise ValueError("已复核报告必须是 JSON 对象")
+    if not args.skip_push or args.record_local_report:
+        check = filter_history(reviewed_payload.get("articles", []), load_history(args.history))
+        if check["duplicates"] or check["updates"]:
+            raise ValueError("推荐列表包含已交付论文，请移到 updates 栏目；仅重新生成报告可用 --skip-push")
+    if args.queue:
+        queue = load_json(args.queue, {})
+        if queue.get("status") not in {"ok", "partial"} or queue.get("date") != reviewed_payload.get("date"):
+            raise ValueError("复核队列必须检索成功，且日期与已复核报告一致")
+        allowed = queue.get("candidates", [])
+        allowed_dois = {normalize_doi(p.get("doi")) for p in allowed if p.get("doi")}
+        allowed_titles = {normalize_title(p.get("title")) for p in allowed}
+        for p in reviewed_payload.get("articles", []):
+            if normalize_doi(p.get("doi")) not in allowed_dois and normalize_title(p.get("title")) not in allowed_titles:
+                raise ValueError("推荐论文不在对应复核队列中，请先将补充检索的论文纳入队列")
+            cutoff = (datetime.fromisoformat(queue["date"]).date() - timedelta(days=1)).isoformat()
+            p["reading_lane"] = "daily" if p.get("publication_date", "") >= cutoff else "supplementary"
+            p["attention_signals"] = (queue.get("radar") or {}).get("paper_signals", {}).get(paper_key(p), {})
+        reviewed_payload["radar"] = queue.get("radar", {})
+        reviewed_payload["updates"] = queue.get("updates_not_for_new_push", []) + (queue.get("radar") or {}).get("observed_updates", [])
+        reviewed_payload["metadata"] = {**reviewed_payload.get("metadata", {}), **queue.get("metadata", {})}
+        reviewed_path = report_path.with_suffix(".reviewed.json")
+        atomic_write_json(reviewed_path, reviewed_payload)
     run_script("summarize_papers.py", "--input", str(reviewed_path), "--output", str(report_path))
 
     delivery = "local-report"
@@ -173,12 +205,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = ChineseArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
 
+    add_commands(subparsers, str(DEFAULT_PROFILE), str(SKILL_DIR / "data" / "observations.json"))
+
     collect_parser = subparsers.add_parser("collect", help="检索、去重、评分并生成复核队列")
     collect_parser.add_argument("--mode", default="all", help="研究配置中定义的模式名称")
     collect_parser.add_argument("--profile", default=str(DEFAULT_PROFILE))
-    # openalex 与 semanticscholar 覆盖会议论文，但匿名配额易触发 429，
-    # 因此不进入默认来源，需要时用 --sources 显式加回。
-    collect_parser.add_argument("--sources", default="europepmc,crossref,biorxiv,arxiv")
+    # 来源由领域预设或显式列表决定，失败情况会写入报告。
+    collect_parser.add_argument("--sources", default="auto", help="auto 按研究配置选择来源，或逗号分隔的来源列表")
+    collect_parser.add_argument("--watch-limit", type=integer_range(0, 50), default=20, help="跟踪明确关注及最近交付的论文数，0关闭")
+    collect_parser.add_argument("--ranking", default=str(DEFAULT_RANKING))
+    collect_parser.add_argument("--observations", default=str(SKILL_DIR / "data" / "observations.json"))
+    collect_parser.add_argument("--to-date", help="报告日期 YYYY-MM-DD，默认为本地今天")
+    collect_parser.add_argument("--candidate-limit", type=integer_range(1, 200), default=50, help="广泛复核池上限，独立于最终推荐数")
     collect_parser.add_argument("--history", default=str(DEFAULT_HISTORY))
     collect_parser.add_argument("--memory", default=str(DEFAULT_MEMORY))
     collect_parser.add_argument("--output-dir")
@@ -187,25 +225,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=integer_range(0, 100, "分"),
         default=70,
         metavar="0-100",
-        help="初筛推荐阈值；默认为70分",
+        help="元数据代理分统计阈值，不作为复核池硬门槛；默认为70分",
     )
     collect_parser.add_argument(
         "--min-results",
         type=integer_range(1, 50, "篇"),
         default=5,
         metavar="1-50",
-        help="高分候选不足该数量时扩大检索窗口；默认为5篇",
+        help="相关候选不足该数量时补充近期论文；默认为5篇",
     )
     collect_parser.add_argument(
         "--max-results",
-        type=integer_range(1, 50, "篇"),
-        default=10,
-        metavar="1-50",
-        help="进入复核队列的最大候选数；默认为10篇",
+        type=integer_range(1, 10, "篇"),
+        default=5,
+        metavar="1-10",
+        help="最终推荐目标上限（1–10），不用于截断复核池",
     )
 
     deliver_parser = subparsers.add_parser("deliver", help="生成已复核 JSON 报告，并可选择推送")
     deliver_parser.add_argument("--reviewed", required=True)
+    deliver_parser.add_argument("--queue", help="对应的 review_queue.json，用于附加可追溯热点与更新栏目")
     deliver_parser.add_argument("--report", required=True)
     deliver_parser.add_argument("--history", default=str(DEFAULT_HISTORY))
     deliver_parser.add_argument("--memory", default=str(DEFAULT_MEMORY))
@@ -218,19 +257,30 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    if args.command == "collect":
+    if args.command == "init-profile":
+        init_profile(args)
+    elif args.command == "prepare":
+        prepare_review(args)
+    elif args.command == "weekly":
+        weekly_report(args)
+    elif args.command == "collect":
         # 先校验参数本身，再校验研究配置，避免配置缺失掩盖明显的用法错误。
-        if args.min_results > args.max_results:
-            raise SystemExit("参数必须满足 --min-results <= --max-results")
+        if args.min_results > args.candidate_limit:
+            raise SystemExit("参数必须满足 --min-results <= --candidate-limit；最终推荐数独立设置")
         try:
             load_profile(args.profile)
         except ProfileError as exc:
             raise SystemExit(str(exc)) from exc
-        collect_stage(args)
+        with workflow_lock(Path(args.observations).with_suffix(".lock")):
+            collect_stage(args)
     else:
-        deliver_stage(args)
+        with workflow_lock(Path(args.history).with_suffix(".lock")):
+            deliver_stage(args)
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except (ValueError, RuntimeError, OSError) as exc:
+        raise SystemExit(f"运行失败：{exc}") from exc

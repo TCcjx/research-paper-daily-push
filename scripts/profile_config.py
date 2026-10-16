@@ -12,6 +12,28 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_PROFILE = SKILL_DIR / "config" / "research_profile.json"
 
+SOURCE_PRESETS = {
+    "general": ["crossref", "openalex", "arxiv"],
+    "computer_science": ["arxiv", "crossref", "openalex"],
+    "biomedical": ["europepmc", "crossref", "biorxiv"],
+}
+SOURCE_NAMES = {"crossref", "openalex", "arxiv", "europepmc", "biorxiv", "semanticscholar"}
+
+
+def profile_sources(profile: dict[str, Any], override: str = "auto") -> list[str]:
+    if override != "auto":
+        sources = unique_strings(override.casefold().split(","))
+    elif profile.get("sources"):
+        sources = profile["sources"]
+    else:
+        preset = profile.get("source_preset", "general")
+        if preset not in SOURCE_PRESETS:
+            raise ProfileError(f"未知来源预设：{preset}")
+        sources = SOURCE_PRESETS[preset]
+    if not isinstance(sources, list) or not sources or any(value not in SOURCE_NAMES for value in sources):
+        raise ProfileError("sources 必须是非空来源标识数组，且不能包含未知来源")
+    return unique_strings(sources)
+
 
 class ProfileError(ValueError):
     """研究配置不足以安全执行任务时抛出。"""
@@ -49,6 +71,10 @@ def load_profile(path: str | Path = DEFAULT_PROFILE, *, require_configured: bool
     profile.setdefault("tags", [])
 
     if require_configured:
+        profile_sources(profile)
+        watchlist = profile.get("watchlist", [])
+        if not isinstance(watchlist, list) or any(not isinstance(item, dict) or not (item.get("doi") or item.get("arxiv")) for item in watchlist):
+            raise ProfileError("watchlist 必须是包含 doi 或 arxiv 编号的对象数组")
         if not clean_text(profile.get("profile_name")):
             raise ProfileError("configured=true 时必须填写 profile_name")
         if not profile_queries(profile, "all"):

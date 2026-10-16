@@ -16,6 +16,7 @@ from common import (
     load_json,
     normalize_doi,
     normalize_title,
+    looks_like_preprint,
     paper_key,
     utc_now_iso,
 )
@@ -48,14 +49,20 @@ def build_indexes(history: list[dict[str, Any]]) -> tuple[dict[str, dict[str, An
 
 def meaningful_update(old: dict[str, Any], new: dict[str, Any]) -> list[str]:
     changed: list[str] = []
-    for field in ("publication_date", "journal", "article_type"):
+    # 已知正式版的论文仍可能由 arXiv 返回旧预印本元数据，不能回退成预印本。
+    metadata_fields = () if not looks_like_preprint(old) and looks_like_preprint(new) else ("publication_date", "journal", "article_type")
+    for field in metadata_fields:
         before = clean_text(old.get(field)).casefold()
         after = clean_text(new.get(field)).casefold()
         if before and after and before != after:
             changed.append(field)
     if not old.get("doi") and new.get("doi"):
         changed.append("doi")
-    if old.get("is_preprint") and not new.get("is_preprint"):
+    old_version = (old.get("source_ids") or {}).get("arxiv_version")
+    new_version = (new.get("source_ids") or {}).get("arxiv_version")
+    if old_version and new_version and old_version != new_version:
+        changed.append("arxiv_version")
+    if looks_like_preprint(old) and not looks_like_preprint(new):
         changed.append("formal_publication")
     return changed
 
@@ -77,6 +84,10 @@ def filter_history(papers: list[dict[str, Any]], history: list[dict[str, Any]]) 
             continue
         changes = meaningful_update(previous, item)
         if changes:
+            if not looks_like_preprint(previous) and looks_like_preprint(item):
+                for field in ("doi", "journal", "article_type", "publication_date", "url", "is_preprint"):
+                    if field in previous:
+                        item[field] = previous[field]
             item["history_status"] = "update"
             item["updated_fields"] = changes
             item["previous_record"] = {
@@ -114,7 +125,20 @@ def commit_history(
     for paper in papers:
         doi = normalize_doi(paper.get("doi"))
         title_key = normalize_title(paper.get("title"))
-        if (doi and doi in by_doi) or (title_key and title_key in by_title):
+        previous = (by_doi.get(doi) if doi else None) or by_title.get(title_key)
+        if previous:
+            # 交付了更新通知后推进旧记录，避免每天重复通知同一变化。
+            if meaningful_update(previous, paper):
+                preserve_formal = not looks_like_preprint(previous) and looks_like_preprint(paper)
+                for field in (() if preserve_formal else ("doi", "journal", "article_type", "publication_date", "url")):
+                    if paper.get(field):
+                        previous[field] = paper[field]
+                previous["source_ids"] = {**(previous.get("source_ids") or {}), **(paper.get("source_ids") or {})}
+                if "is_preprint" in paper and not preserve_formal:
+                    previous["is_preprint"] = bool(paper["is_preprint"])
+                previous["last_update_delivered"] = pushed_date
+                if doi:
+                    by_doi[doi] = previous
             continue
         record = {
             "doi": doi,
@@ -127,6 +151,8 @@ def commit_history(
             "article_type": clean_text(paper.get("article_type")),
             "is_preprint": bool(paper.get("is_preprint")),
             "delivery": delivery,
+            "url": paper.get("url", ""),
+            "source_ids": paper.get("source_ids") or {},
             "identity_key": paper_key(paper),
         }
         history.append(record)
@@ -159,7 +185,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     history = load_history(args.history)
-    papers = extract_papers(load_json(args.input, {}))
+    payload = load_json(args.input, {})
+    papers = extract_papers(payload)
+    if args.command == "commit" and isinstance(payload, dict):
+        papers += [p for p in payload.get("updates", []) if isinstance(p, dict) and p.get("history_status") == "update"]
     if args.command == "filter":
         result = filter_history(papers, history)
         atomic_write_json(args.output, result)

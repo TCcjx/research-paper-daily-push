@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import warnings
 import re
 import sys
 import time
@@ -29,7 +30,7 @@ from common import (
     unique_strings,
     utc_now_iso,
 )
-from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, profile_queries, profile_terms
+from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, profile_queries, profile_terms, profile_sources
 
 API_SOURCES = ("europepmc", "crossref", "semanticscholar", "openalex", "biorxiv", "arxiv")
 
@@ -77,18 +78,30 @@ def _epmc_type(record: dict[str, Any]) -> str:
 def search_europepmc(queries: list[str], start: date, end: date) -> list[dict[str, Any]]:
     combined = " OR ".join(f"({query})" for query in queries)
     epmc_query = f"({combined}) AND FIRST_PDATE:[{start.isoformat()} TO {end.isoformat()}] sort_date:y"
-    params = urlencode(
-        {
-            "query": epmc_query,
-            "format": "json",
-            "resultType": "core",
-            "pageSize": 500,
-            "synonym": "false",
-        }
-    )
-    payload = json_request(f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?{params}")
+    records = []
+    cursor = "*"
+    seen = set()
+    for page in range(4):
+        params = urlencode({"query": epmc_query, "format": "json", "resultType": "core",
+                            "pageSize": 500, "synonym": "false", "cursorMark": cursor})
+        payload = json_request(f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?{params}")
+        if payload.get("errMsg"):
+            raise RuntimeError(f"Europe PMC 查询失败：{payload['errMsg']}")
+        batch = payload.get("resultList", {}).get("result", [])
+        records.extend(batch)
+        next_cursor = payload.get("nextCursorMark")
+        if not batch or not next_cursor or next_cursor == cursor or next_cursor in seen:
+            break
+        if len(records) >= int(payload.get("hitCount") or len(records)):
+            break
+        seen.add(cursor)
+        cursor = next_cursor
+        if page == 3:
+            warnings.warn("Europe PMC 达到2000条上限，样本可能截断")
+        else:
+            time.sleep(0.15)
     output: list[dict[str, Any]] = []
-    for item in payload.get("resultList", {}).get("result", []):
+    for item in records:
         doi = normalize_doi(item.get("doi"))
         pmid = clean_text(item.get("pmid"))
         pmcid = clean_text(item.get("pmcid"))
@@ -108,6 +121,7 @@ def search_europepmc(queries: list[str], start: date, end: date) -> list[dict[st
                 "sources": ["Europe PMC"],
                 "source_ids": {key: value for key, value in {"pmid": pmid, "pmcid": pmcid}.items() if value},
                 "citation_count": int(item.get("citedByCount") or 0),
+                "citation_counts": {"europepmc": int(item["citedByCount"]) } if item.get("citedByCount") is not None else {},
                 "is_open_access": str(item.get("isOpenAccess", "")).upper() == "Y",
                 "is_preprint": "preprint" in _epmc_type(item).casefold(),
                 "needs_verification": [] if item.get("abstractText") else ["摘要缺失，核心结论需从原文核实"],
@@ -135,69 +149,75 @@ def search_crossref(queries: list[str], start: date, end: date) -> list[dict[str
         ("from-online-pub-date", "until-online-pub-date"),
         ("from-pub-date", "until-pub-date"),
     )
-    request_total = len(queries) * len(date_filter_pairs)
-    request_index = 0
     for query in queries:
         for from_filter, until_filter in date_filter_pairs:
-            params: dict[str, Any] = {
-                "query.bibliographic": compact_query(query),
-                "filter": (
-                    f"{from_filter}:{start.isoformat()},"
-                    f"{until_filter}:{end.isoformat()},"
-                    "type:journal-article"
-                ),
-                "rows": 100,
-                "sort": "published",
-                "order": "desc",
-            }
-            if mailto:
-                params["mailto"] = mailto
-            payload = json_request(f"https://api.crossref.org/works?{urlencode(params)}")
-            for item in payload.get("message", {}).get("items", []):
-                authors = []
-                for author in item.get("author", []):
-                    name = " ".join(
-                        filter(
-                            None,
-                            [
-                                clean_text(author.get("given")),
-                                clean_text(author.get("family")),
-                            ],
-                        )
-                    )
-                    if name:
-                        authors.append(name)
-                doi = normalize_doi(item.get("DOI"))
-                output.append(
-                    {
-                        "doi": doi,
-                        "title": clean_text(first_nonempty(*(item.get("title") or []))),
-                        "authors": unique_strings(authors),
-                        "journal": clean_text(first_nonempty(*(item.get("container-title") or []))),
-                        "publication_date": _crossref_date(item),
-                        "url": clean_text(
-                            first_nonempty(
-                                item.get("URL"), f"https://doi.org/{doi}" if doi else ""
-                            )
-                        ),
-                        "article_type": clean_text(item.get("type")),
-                        "abstract": clean_text(item.get("abstract")),
-                        "sources": ["Crossref"],
-                        "source_ids": {},
-                        "citation_count": int(item.get("is-referenced-by-count") or 0),
-                        "is_open_access": bool(item.get("license")),
-                        # 上面的 filter 固定了 type:journal-article，Crossref 因此不会返回预印本。
-                        # 保留该字段是为了让下游统一读取 is_preprint 时无需区分来源。
-                        "is_preprint": False,
-                        "needs_verification": (
-                            []
-                            if item.get("abstract")
-                            else ["Crossref 未提供摘要，结论需从原文核实"]
-                        ),
+            for work_type in ("journal-article", "proceedings-article"):
+                cursor = "*"
+                seen = set()
+                for page in range(3):
+                    params: dict[str, Any] = {
+                        "query.bibliographic": compact_query(query),
+                        "filter": f"{from_filter}:{start.isoformat()},{until_filter}:{end.isoformat()},type:{work_type}",
+                        "rows": 100, "sort": "score", "order": "desc", "cursor": cursor,
                     }
-                )
-            request_index += 1
-            if request_index < request_total:
+                    if mailto:
+                        params["mailto"] = mailto
+                    payload = json_request(f"https://api.crossref.org/works?{urlencode(params)}")
+                    message = payload.get("message", {})
+                    batch = message.get("items", [])
+                    for item in batch:
+                        authors = []
+                        for author in item.get("author", []):
+                            name = " ".join(
+                                filter(
+                                    None,
+                                    [
+                                        clean_text(author.get("given")),
+                                        clean_text(author.get("family")),
+                                    ],
+                                )
+                            )
+                            if name:
+                                authors.append(name)
+                        doi = normalize_doi(item.get("DOI"))
+                        output.append(
+                            {
+                                "doi": doi,
+                                "title": clean_text(first_nonempty(*(item.get("title") or []))),
+                                "authors": unique_strings(authors),
+                                "journal": clean_text(first_nonempty(*(item.get("container-title") or []))),
+                                "publication_date": _crossref_date(item),
+                                "url": clean_text(
+                                    first_nonempty(
+                                        item.get("URL"), f"https://doi.org/{doi}" if doi else ""
+                                    )
+                                ),
+                                "article_type": clean_text(item.get("type")),
+                                "abstract": clean_text(item.get("abstract")),
+                                "sources": ["Crossref"],
+                                "source_ids": {},
+                                "citation_count": int(item.get("is-referenced-by-count") or 0),
+                                "citation_counts": {"crossref": int(item["is-referenced-by-count"]) } if item.get("is-referenced-by-count") is not None else {},
+                                "is_open_access": bool(item.get("license")),
+                                # 本接口只取期刊与会议正式论文。
+                                # 保留该字段是为了让下游统一读取 is_preprint 时无需区分来源。
+                                "is_preprint": False,
+                                "needs_verification": (
+                                    []
+                                    if item.get("abstract")
+                                    else ["Crossref 未提供摘要，结论需从原文核实"]
+                                ),
+                            }
+                        )
+                    next_cursor = message.get("next-cursor")
+                    if len(batch) < 100 or not next_cursor or next_cursor == cursor or next_cursor in seen:
+                        break
+                    seen.add(cursor)
+                    cursor = next_cursor
+                    if page == 2:
+                        warnings.warn("Crossref 单查询/日期类型/文章类型达到300条上限，样本可能截断")
+                    else:
+                        time.sleep(0.15)
                 time.sleep(0.15)
     return output
 
@@ -221,6 +241,8 @@ def search_semantic_scholar(queries: list[str], start: date, end: date) -> list[
         payload = json_request(
             f"https://api.semanticscholar.org/graph/v1/paper/search?{params}", headers=headers
         )
+        if len(payload.get("data", [])) >= 100 or payload.get("next") or int(payload.get("total") or 0) > 100:
+            warnings.warn("Semantic Scholar 单查询只读取100条相关性结果，日期窗口可能覆盖不足")
         for item in payload.get("data", []):
             published = parse_date(item.get("publicationDate"))
             if not published or not (start.isoformat() <= published <= end.isoformat()):
@@ -242,6 +264,7 @@ def search_semantic_scholar(queries: list[str], start: date, end: date) -> list[
                     "sources": ["Semantic Scholar"],
                     "source_ids": {"semantic_scholar": clean_text(item.get("paperId"))},
                     "citation_count": int(item.get("citationCount") or 0),
+                    "citation_counts": {"semanticscholar": int(item["citationCount"]) } if item.get("citationCount") is not None else {},
                     "is_open_access": bool(item.get("openAccessPdf")),
                     "is_preprint": any("preprint" in str(value).casefold() for value in types),
                     "needs_verification": [] if item.get("abstract") else ["Semantic Scholar 未提供摘要，结论需从原文核实"],
@@ -344,6 +367,7 @@ def search_openalex(queries: list[str], start: date, end: date) -> list[dict[str
                         "sources": ["OpenAlex"],
                         "source_ids": {"openalex": openalex_id} if openalex_id else {},
                         "citation_count": int(item.get("cited_by_count") or 0),
+                        "citation_counts": {"openalex": int(item["cited_by_count"]) } if item.get("cited_by_count") is not None else {},
                         "is_open_access": bool(
                             (item.get("open_access") or {}).get("is_oa")
                         ),
@@ -361,6 +385,8 @@ def search_openalex(queries: list[str], start: date, end: date) -> list[dict[str
             time.sleep(0.15)
         if query_index + 1 < len(queries):
             time.sleep(0.15)
+        if retrieved_for_query >= OPENALEX_MAX_RESULTS_PER_QUERY:
+            warnings.warn("OpenAlex 单查询达到600条上限，样本可能截断")
     return output
 
 
@@ -404,6 +430,8 @@ def search_biorxiv(_queries: list[str], start: date, end: date) -> list[dict[str
         total = int(messages[0].get("total") or cursor) if messages else cursor
         if cursor >= total:
             break
+    if cursor >= maximum and cursor < total:
+        warnings.warn("bioRxiv 达到600条上限，样本可能截断")
     return output
 
 
@@ -445,6 +473,7 @@ def _arxiv_entry(entry: Any) -> dict[str, Any]:
     journal_ref = _arxiv_text(entry, ARXIV_NS, "journal_ref")
     comment = _arxiv_text(entry, ARXIV_NS, "comment")
     primary = entry.find(f"{ARXIV_NS}primary_category")
+    version = re.search(r"v(\d+)$", raw_url)
     notes = ["arXiv 预印本，尚未完成正式同行评议"]
     if doi or journal_ref:
         notes.append("元数据带有 DOI 或期刊登记信息，需核实是否已在正式场所出版")
@@ -460,7 +489,8 @@ def _arxiv_entry(entry: Any) -> dict[str, Any]:
         "article_type": "preprint",
         "abstract": _arxiv_text(entry, ATOM_NS, "summary"),
         "sources": ["arXiv"],
-        "source_ids": {"arxiv": _arxiv_identifiers(raw_url)} if raw_url else {},
+        "source_ids": {"arxiv": _arxiv_identifiers(raw_url), "arxiv_version": version.group(1) if version else ""} if raw_url else {},
+        "source_updated_at": _arxiv_text(entry, ATOM_NS, "updated"),
         "citation_count": 0,
         "is_open_access": True,
         "is_preprint": True,
@@ -475,8 +505,8 @@ def _arxiv_entry(entry: Any) -> dict[str, Any]:
 def search_arxiv(queries: list[str], start: date, end: date) -> list[dict[str, Any]]:
     """按提交时间倒序检索 arXiv，并在本地切出日期窗口。
 
-    arXiv 的查询解析器不接受“布尔分组 + submittedDate 区间”的组合：这样写会稳定返回
-    0 条结果，所以只能在本地按日期过滤，并在翻页越过窗口时停止。官方要求相邻请求
+    使用提交时间倒序结果并本地切分日期窗口，避免依赖不同查询组合的日期解析行为。
+    翻页越过窗口时停止。官方要求相邻请求
     间隔不少于 3 秒；重试次数固定，不做无限重试。
     """
     output: list[dict[str, Any]] = []
@@ -525,6 +555,8 @@ def search_arxiv(queries: list[str], start: date, end: date) -> list[dict[str, A
             total_results = int(root.findtext(f"{OPENSEARCH_NS}totalResults", default="0") or 0)
             if total_results and offset >= total_results:
                 break
+        if offset >= ARXIV_MAX_RESULTS_PER_QUERY and not passed_window:
+            warnings.warn("arXiv 单查询达到400条上限，可能未覆盖整个窗口")
     return output
 
 
@@ -549,15 +581,23 @@ def collect(
     papers: list[dict[str, Any]] = []
     counts: dict[str, int] = {}
     errors: list[dict[str, str]] = []
+    coverage_warnings: list[str] = []
+    if not sources:
+        raise ValueError("至少选择一个文献来源")
     for source in sources:
         try:
-            found = SOURCE_FUNCTIONS[source](queries, start, end)
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                found = SOURCE_FUNCTIONS[source](queries, start, end)
+            coverage_warnings.extend(f"{source}: {item.message}" for item in caught)
             counts[source] = len(found)
             papers.extend(found)
         # 各来源可能出现不同的解析或传输异常；逐个隔离，避免单一来源故障清空其他有效结果。
         except Exception as exc:  # noqa: BLE001
             counts[source] = 0
             errors.append({"source": source, "error": f"{type(exc).__name__}: {exc}"})
+    if len(errors) == len(sources):
+        raise RuntimeError("所有文献来源均失败：" + "; ".join(f"{e['source']}: {e['error']}" for e in errors))
     retrieved_count = len(papers)
     merged = [
         paper for paper in deduplicate_papers(papers)
@@ -575,6 +615,8 @@ def collect(
         "retrieved_count": retrieved_count,
         "unique_relevant_count": len(merged),
         "errors": errors,
+        "coverage_warnings": unique_strings(coverage_warnings),
+        "status": "partial" if errors or coverage_warnings else "ok",
         "papers": merged,
     }
 
@@ -593,7 +635,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--mode", default="all", help="研究配置中定义的模式名称")
     parser.add_argument("--query", action="append", help="自定义查询语句；可以重复传入")
     parser.add_argument("--profile", default=str(DEFAULT_PROFILE))
-    parser.add_argument("--sources", default=",".join(API_SOURCES), help="以英文逗号分隔的来源标识")
+    parser.add_argument("--sources", default="auto", help="以英文逗号分隔的来源标识")
     parser.add_argument("--output", required=True, help="输出 JSON 路径")
     return parser.parse_args(argv)
 
@@ -612,7 +654,7 @@ def main(argv: list[str] | None = None) -> int:
     start = date.fromisoformat(args.from_date) if args.from_date else end - timedelta(days=args.days - 1)
     if start > end:
         raise SystemExit("--from-date 不能晚于 --to-date")
-    sources = [value.strip().casefold() for value in args.sources.split(",") if value.strip()]
+    sources = profile_sources(profile, args.sources)
     unknown = [source for source in sources if source not in SOURCE_FUNCTIONS]
     if unknown:
         raise SystemExit(f"未知的文献来源：{', '.join(unknown)}")

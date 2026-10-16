@@ -1,135 +1,54 @@
 ---
 name: research-paper-daily-push
-description: 根据用户配置的研究方向，检索、复核、评分、去重并中文总结近期科研论文，同时维护研究记忆并可选推送到微信。适用于每日或每周精选文献雷达；不适用于穷尽式系统综述或仅做参考文献格式整理的任务。
+description: 按研究领域收集近期论文、识别有证据的热点线索、复核精选重点论文、持续跟踪出版与版本更新，生成中文日报或周报并可选微信推送。适用于研究人员跟进进展，不用于穷尽式系统综述。
 ---
 
-# 每日科研文献雷达
+# 科研论文雷达
 
-生成高选择性的中文文献雷达，不能把关键词检索结果直接堆给用户。每天最多推荐5–10篇证据充分且推荐指数不低于70分的论文；证据不足时允许少于5篇或零推荐。每篇论文中实际使用的专业术语都要给出两种解释：一条严谨的学术定义和一条忠实、易懂的比喻或大白话解释。
+让研究人员快速知道哪些方向变活跃、哪些论文值得读，以及与已有工作的关系。默认简短日报，精选约3–5篇，证据不足时允许少于3篇或零推荐；精读时再展开方法与术语。
 
-## 配置边界
+## 配置
 
-证据复核前先阅读 [`references/research_topics.md`](references/research_topics.md)，并使用 `config/research_profile.json` 进行确定性检索和初步评分。公开配置有意留空；如果 `configured` 为 `false`，停止检索并帮助用户配置研究方向，不能臆造主题，也不能悄悄套用内置示例。创建或修改配置时阅读 [`references/profile_schema.md`](references/profile_schema.md)。
+使用 `config/research_profile.json` 或用户指定的 `--profile`。`configured=false` 时根据用户明确提供的领域先配置，不猜主题、不自动套用示例。以实际配置的 `research_context`、`priority_questions` 为复核背景；存在配套主题说明时一并阅读并保持一致。字段见 [profile_schema.md](references/profile_schema.md)。
 
-`examples/` 下的已填写配置只是供用户自行复制的样例，不是可用的运行时主题：即使 `config/research_profile.json` 未配置，也不能改用 `examples/research_profile.temporal-kg.json` 去检索，必须先由用户确认自己的方向并写入正式配置文件。
+可运行 `python scripts/run_daily.py init-profile --name "研究名称" --query "检索式" --topic "主题=短语,同义词" --source-preset computer_science --output config/my.local.json`。继续补充科学问题、同义词、领域方法词表。没有提供领域时先询问领域及核心问题。
 
-自然语言主题文件负责科学解释，JSON配置负责 API 查询、主题词组、聚焦模式、初筛权重、期刊分层、排除条件、强烈推荐条件、研究路线分类和标签词表。两者必须保持一致。
+## 检索与发现
 
-发表场所等级另由 `config/venue_ranking.json` 提供（CCF 目录条目、等级分值、权威性筛选策略）。修改等级目录或筛选策略前阅读 [`references/venue_catalog.md`](references/venue_catalog.md)。
+运行 `python scripts/run_daily.py collect --profile <配置> --mode all`，控制台显示输出目录 `data/runs/<scope>/<日期>/`。阅读 `discovery.md` 与 `review_queue.json`：前者明确标为未复核发现简报，后者默认含最多50篇广泛候选，与最终推荐目标5篇分离。低于70分的元数据代理分不阻止进入复核池，不能仅依照代理分挑选论文。
 
-## 工作流程
+一次收集30天样本再本地切窗。今天和昨天是近24小时的日级近似；相关候选不足时加入7→14→30天补充，保留 `reading_lane=supplementary`，不能把旧论文说成今日新增。按研究问题、贡献、相对已有工作变化、可复现性及局限检查完整候选池。用 `--candidate-limit` 扩大复核池；默认场所策略 `label_only`，不因预印本或目录未覆盖而排除。
 
-1. 运行 `python scripts/run_daily.py collect --mode <mode>`。`all` 使用默认查询，聚焦模式名称来自研究配置。默认来源为 Europe PMC、Crossref、bioRxiv 和 arXiv；命令会合并重复记录，排除确认推送过的论文，按 `config/venue_ranking.json` 标注发表场所等级，并写入 `data/runs/YYYY-MM-DD/review_queue.json`。OpenAlex 与 Semantic Scholar 已实现但默认不启用（两者匿名共享配额，突发请求易收到 `429`），需要时用 `--sources europepmc,crossref,openalex,semanticscholar,arxiv` 显式加回。Crossref 只返回 `journal-article`，会议论文只能由这两个来源召回：研究方向以 AI 会议为主时必须显式加回，不能因为默认列表里没有就把会议论文缺失当成检索正常。OpenAlex 可匿名检索，并使用游标读取每条查询最多600条近期记录；可选的 `OPENALEX_API_KEY` 和 `OPENALEX_MAILTO` 只能从环境变量读取，不能写入仓库或日志。
-2. arXiv 只按提交时间倒序翻页（每条查询最多400条），日期窗口在本地切分：把 `submittedDate` 与布尔分组写进同一条查询会让 arXiv 稳定返回 0 条。相邻请求间隔不少于 3 秒，不重试到无限。arXiv 与正式出版记录合并时，以正式出版的期刊、DOI 和链接为准，只有没有正式出版证据时才保留预印本身份。
-3. 先建立近24小时优先的候选池。如果达到70分的初筛候选少于5篇，程序会按 7天→14天→30天 逐级扩大检索窗口，在不降低评分门槛的前提下尽量凑足候选；窗口到 30 天仍不足时如实输出，不为凑数降低标准。学术接口经常只提供日级日期，因此要把“24小时”视为优先近似窗口，并在报告中说明实际范围。
-4. 阅读限定长度的 `research_memory_context`、候选题名、摘要、元数据、评分证据、`venue_ranking` 等级标注和待核实提示。研究记忆只用于发现连续证据、未解决问题、研究空白和重复思路，不能当成用户明确偏好的证明。
-5. 对可能入选的论文进行证据核验。如果摘要缺失、截断、相互矛盾或不足以支持实质性结论，应核对 DOI、出版商页面或可信论文库页面。不能只根据题名推断结果。
-6. 证据复核后重新评价每篇候选。推荐指数为 `relevance*0.40 + novelty*0.20 + quality*0.15 + methodology*0.15 + inspiration*0.10`，每个分项均为0–100分。只有检查过可用证据后，才能把 `score_status` 设为 `evidence_reviewed`。程序初筛分只用于排序，不代表最终结论。
-7. 排除弱相关论文、重复论文、撤稿/勘误/社论、明显可疑来源、命中配置排除条件的研究，以及关键主张无法核实的论文。预印本要明确标注为未经过正式同行评议。陌生期刊应标记“需要核实”，不能直接判定为低质量。
-8. 只保留证据充分且评分不低于70分的论文，按推荐指数降序排列，不为凑数降低标准。按照下方数据约定编写 `reviewed_articles.json`，把根字段 `term_explanation_mode` 设为 `dual`，然后运行 `python scripts/summarize_papers.py --input <reviewed.json> --output <report.md>`。
-9. 只有用户或定时任务提示词明确授权外部推送时，才能运行 `python scripts/run_daily.py deliver --reviewed <reviewed.json> --report <report.md> --provider auto`。报告已经在本地真实展示时，可使用 `--skip-push --record-local-report`。只有确认推送或展示成功后，交付阶段才更新去重历史和研究记忆。
+来源按预设选择：general（Crossref/OpenAlex/arXiv）、computer_science（arXiv/Crossref/OpenAlex）、biomedical（Europe PMC/Crossref/bioRxiv）。配置 `sources` 或命令行 `--sources` 可覆盖。来源失败、分页上限必须展示；全部来源失败则停止，不能说今天没有好论文。API范围与上限见 [data_sources.md](references/data_sources.md)。
 
-## 发表场所等级与权威性
+## 热点与重要性
 
-`venue_ranking` 只按官方目录条目匹配期刊或会议名称、公认简称与配置别名，并在 `venue_ranking.json` 的 `policy.mode` 中控制筛选力度：`label_only` 只标注不排除，`authority_first` 让预印本和未核实场所必须达到相关性阈值才进入复核队列，`strict_ccf_or_tier` 只保留命中目录或配置分层的论文。
+程序比较同一查询/来源样本中近7天与前23天的主题日均发文数，并附论文链接。这是样本发文活跃度，不是全领域统计、社会热度或学界共识。缺源、截断时不判断升温；零基线仅提示样本新出现，不能报无限增长。
 
-红线是不得臆造等级：未命中目录时只能标注“正规出版物，未收录于内置目录（需要核实）”；预印本没有 CCF 等级；作者自述的录用去向、按简称匹配的结果、以及同时命中期刊与会议条目的名称都算未核实，核实之前不能作为等级依据，也不能触发 `strong_recommendation`。同名简称存在歧义时按较低等级标注。Findings、Workshop 等附属卷不等于主会等级。目录只覆盖部分领域，覆盖范围与补齐方式见 [`references/venue_catalog.md`](references/venue_catalog.md)。
+同来源引用快照变化是辅助关注度证据，存在索引延迟。无可比快照时写未知，不写零热度。未经查询的 GitHub stars、下载量、社交讨论和排行榜不能补造。用户需要社区热点时另查相关领域可信的一手渠道，标明来源、时间及其与论文的关系。
 
-## 证据与写作规则
+重要性与热度分别判断。新基准、关键方法、可靠负结果、解决核心问题的工作可以重要而暂不热门。场所高、作者知名或摘要写 novel 都不能独立证明突破。
 
-明确区分直接实验依据、相关性、假设和推测。使用审慎的正式科学中文。不得捏造题名、研究对象、方法、样本、数值、DOI、机制或数据集；证据不支持的细节写明“需要核实”。
+## 证据复核
 
-每篇论文提供：忠实中文题名和英文原题、期刊/发表场所等级/日期/DOI/链接/文章类型、总分和分项评分、100个汉字以内的推荐理由、3–5条受证据约束的核心发现，以及针对实验设计、方法、关键对象或机制、目标研究体系、未来课题或基金、高水平论文潜力和局限/验证需求的具体启发。存在研究路线阶段时，说明论文对应的阶段。拉丁学名和适用的基因名称使用斜体。添加1–8个聚焦标签。
+可运行 `python scripts/run_daily.py prepare --queue <队列> --output <reviewed_articles.json>` 生成待填写草稿。检查完整队列后调整入选，不只复核草稿预填的前几篇。草稿的空证据和 pending 状态会阻止交付。
 
-只有证据充分，并且人工复核后满足配置的强烈推荐规则，才能设置 `strong_recommendation: true`。单纯关键词命中不能触发强烈推荐。发表场所等级未经核实时也不能设为强烈推荐，需要先按 `venue_ranking.needs_verification` 完成核对。
+阅读摘要；摘要缺失或不足时核对 DOI、出版商、可信论文库或可访问全文。记录实际阅读的 URL、证据类型及其支持的结论。题名不能支撑实验发现；未读全文不能声称已读全文。区分作者主张、独立比较、相关性与因果。不补造实验数值、代码、机制或结论。
 
-报告层面应包含检索/筛选/最终推荐数量、最值得阅读前三名及理由，并结合当天证据提出1–3个可检验的研究思路。
+按 [reviewed_schema.md](references/reviewed_schema.md) 完成 JSON。每篇给中文与英文题名、日期、链接、预印本状态、100字内阅读理由、1–5条发现、主要贡献、与已有工作的比较、重要性与置信度、局限和可借鉴方法。未完成独立比较时如实说明，不能凭空写领先SOTA。
 
-## 专业术语双重解释
+复核后重评五项0–100分：相关性、创新性、单篇质量、方法价值、研究启发。总分 `round(relevance*.40 + novelty*.20 + quality*.15 + methodology*.15 + inspiration*.10)` 不低于70才推荐；这是个人阅读优先级，不是客观科学质量量表。只有检查证据后才设 `score_status=evidence_reviewed`。同一 DOI 或规范化题名不能重复入选。
 
-覆盖中文题名、核心发现、研究启发或强烈推荐理由中实际引入的所有专业术语，包括相关方法、领域概念、机制、结构、统计学术语、计算方法和命名通路/框架。同一篇论文中的相同术语和明显别名只解释一次。
+默认 `report_style=brief`、`term_explanation_mode=off`。精读用 detailed，关键术语双重解释用 dual；只解释理解所需术语，不强制解释全部术语。研究思路可0–3条，无证据不填。预印本明确标为未经正式同行评议，也可在证据充分时强烈推荐，但须说明局限。陌生场所不等于低质量。目录规则见 [venue_catalog.md](references/venue_catalog.md)。
 
-- `academic_explanation`：技术上准确的定义，说明术语是什么，并在必要时说明其测量或支持的内容；不超过180个汉字。
-- `plain_explanation`：具体的比喻或大白话解释，同时保持科学边界；不超过180个汉字。
+## 交付和跟踪
 
-术语定义不是论文证据。不能把相关性写成因果，也不能把比喻当作真实机制。
+本地生成：`python scripts/run_daily.py deliver --reviewed <已复核JSON> --queue <对应队列> --report <报告.md> --skip-push`。先展示报告；实际展示后才增加 `--record-local-report` 写历史。文件生成不等于用户已阅读。
 
-## 已复核JSON数据约定
+用户或定时任务明确授权外部发送后才可运行 `deliver ... --provider auto`。凭据仅从环境变量读取；推送设置见 [wxpusher_setup.md](references/wxpusher_setup.md)。无渠道时保留报告并提示“微信推送尚未配置”。部分发送失败不能声称完整交付，也不能无限重发。
 
-根对象包含 `date`、`term_explanation_mode`、`metadata`、`articles` 和 `research_ideas`。每篇论文使用以下结构：
+`--queue` 追加对应检索的热点、警告与更新，并校验推荐来源。已交付论文进入 updates，不再次作为新推荐。watchlist 可关注 DOI/arXiv ID；每次默认检查明确关注和最近交付的最多20篇，跨越30天窗口，`--watch-limit 0` 关闭。更新栏目只说明元数据证实的出版/版本变化；不把版本变化当成新结论。后续工作的支持或反驳仍需实际阅读。
 
-```json
-{
-  "title": "英文原题",
-  "chinese_title": "忠实中文题名",
-  "journal": "期刊名称",
-  "publication_date": "YYYY-MM-DD",
-  "doi": "10.xxxx/xxxx",
-  "url": "https://...",
-  "article_type": "研究论文",
-  "venue_ranking": {
-    "status": "ccf_listed",
-    "ccf": "A",
-    "kind": "journal",
-    "venue": "IEEE Transactions on Knowledge and Data Engineering",
-    "label": "CCF-A 期刊",
-    "match_method": "name",
-    "verified_venue": true,
-    "ambiguous": false,
-    "catalog_version": "第七版（2026）",
-    "needs_verification": []
-  },
-  "recommendation_score": 86,
-  "score_status": "evidence_reviewed",
-  "component_scores": {
-    "relevance": 90,
-    "novelty": 80,
-    "quality": 85,
-    "methodology": 88,
-    "inspiration": 90
-  },
-  "why_worth_reading": "100字以内",
-  "core_findings": ["3–5条受证据约束的结论"],
-  "term_explanations": [
-    {
-      "term": "专业术语",
-      "academic_explanation": "严谨解释",
-      "plain_explanation": "保持科学边界的大白话解释"
-    }
-  ],
-  "research_inspiration": {
-    "experimental_design": ["..."],
-    "methods": ["..."],
-    "key_entities_mechanisms": ["...或需要核实"],
-    "target_system": ["..."],
-    "future_direction": ["..."],
-    "paper_potential": ["..."],
-    "limitations_validation": ["..."]
-  },
-  "top3_reason": "可选",
-  "tags": ["主题标签"],
-  "strong_recommendation": false,
-  "strong_recommendation_reasons": [],
-  "needs_verification": []
-}
-```
+观测 `data/observations.json` 与交付记忆分离：按配置、查询、来源隔离，同日替换，保留90天；交付历史和研究记忆仅在确认成功后推进。记忆不能证明用户偏好。语义改题且无共同标识的版本关联需人工核对，不自动模糊合并。
 
-## 去重与研究记忆
-
-`data/pushed_articles.json` 是交付历史。论文身份优先使用 DOI，没有 DOI 时使用规范化题名。已经推送的 DOI 不能再次作为新论文推送。预印本转为正式出版时标记为“更新”，不能当成全新论文。所有写入操作必须保持原子性。
-
-`data/research_memory.json` 只记录已经确认交付的报告，包括精简结论、标签、已解释术语、研究路线关联、强烈推荐、未解决验证事项和研究思路。修改记忆行为时阅读 [`references/research_memory.md`](references/research_memory.md)。这是本地工作流记忆，不是模型训练。
-
-## 通知与错误处理
-
-通知渠道优先级为 WxPusher、Server酱、企业微信。凭据只能存放在环境变量中，不得出现在报告或日志里：
-
-- WxPusher：`WXPUSHER_APP_TOKEN`、`WXPUSHER_UID`；可选 `WXPUSHER_CONTENT_URL`。
-- Server酱：`SERVERCHAN_SENDKEY`。
-- 企业微信：`WECOM_WEBHOOK_URL` 或 `WECHAT_WORK_WEBHOOK_URL`。
-
-配置、测试或排查 WxPusher 时阅读 [`references/wxpusher_setup.md`](references/wxpusher_setup.md)。使用 `python scripts/push_wechat.py --provider wxpusher --check-config` 在本地检查配置；只有得到明确授权后，才可使用 `--test-message` 发送真实测试消息。
-
-没有配置通知渠道时仍要正常生成报告，并准确提示：“微信推送尚未配置。”某一个文献来源失败时继续处理其他来源，并说明失败情况；所有来源都失败时停止。没有论文通过复核时生成零推荐报告，不能降低阈值。不得无限重试。
-
-仓库不预设周期任务。只有用户明确要求时才创建或修改定时任务，并在定时提示词中写明自动交付授权。
+运行 `python scripts/run_daily.py weekly --profile <配置> --output <周报.md>` 汇总同范围最近7天实际观测；无观测日不补零，无数据时不能虚构趋势。项目不预设定时任务，仅用户明确要求时创建，并注明时区、设备和外部推送授权。

@@ -1,156 +1,117 @@
-# research-paper-daily-push：每日科研文献雷达
+# 科研论文雷达 · research-paper-daily-push
 
-[![GitHub stars](https://img.shields.io/github/stars/TCcjx/research-paper-daily-push?style=flat-square&logo=github)](https://github.com/TCcjx/research-paper-daily-push/stargazers)
+为研究人员提供可持续使用的论文工作流：**热点线索 → 广泛候选 → 证据复核 → 精选日报 → 更新跟踪与周报**。
 
-这是一个开源的 Codex Skill，用于每天或每周检索近期科研论文，并经过初筛、证据复核、评分、去重和中文总结后，只推荐真正值得阅读的少量论文。它支持为每个专业术语同时生成严谨解释和大白话解释，也可以通过 WxPusher、Server酱或企业微信机器人推送报告，并在本地维护推送历史与研究记忆。
+项目既是 Codex Skill，也提供零第三方依赖的 Python 命令。脚本负责收集、去重、观测与校验；研究人员或使用此 Skill 的 AI 负责阅读证据、判断科学贡献。未配置模型 API，不会自动把搜索结果包装成已复核推荐。
 
-公开模板**不包含任何预设研究主题、访问凭据、推送历史或学习记录**。在完成研究配置前，程序会停止检索，避免返回无关论文。
+## 主要产出
 
-> 第一次接触 Python、Git 或 Codex Skill？请直接阅读[小白安装与使用指南](references/installation_guide.md)。
+- 发现简报：直接查看候选论文、样本活跃方向和更新，明确标为未复核。
+- 重点论文日报：默认精选约3–5篇，包含贡献、相对已有工作的变化、阅读理由、局限与证据链接，允许零推荐。
+- 活跃度与关注度证据：近7天相对前23天的主题日均发文变化，以及同来源引用快照变化。
+- 持续跟踪：关注和最近交付论文的出版/版本变化，已交付论文不重复当作新论文推送。
+- 离线周报与可选微信通知。
 
-## 主要功能
+发文增长只是热点线索，不代表全领域统计、社交热度或学界共识。当前没有接入 GitHub/社交热榜。
 
-- 优先检索近24小时论文；高分候选不足时自动按 7天→14天→30天 逐级扩大检索窗口，在不降低评分门槛的前提下尽量凑足候选，仍不足时如实输出，不为凑数降低标准。
-- 支持 Europe PMC、Crossref、Semantic Scholar、OpenAlex、bioRxiv 和 arXiv 等学术接口；默认检索 Europe PMC、Crossref、bioRxiv 和 arXiv，OpenAlex 与 Semantic Scholar 因匿名共享配额容易 `429`，需用 `--sources` 显式启用。arXiv 按提交时间倒序翻页、在本地切分日期窗口，并遵守官方限速要求。
-- 自动标注论文发表场所的认可度等级（CCF 推荐国际学术期刊会议目录第七版），并按权威性政策优先保留高认可度论文；未命中目录只标"需要核实"，绝不臆造等级。
-- 按研究相关性、创新性、论文质量、方法学价值和研究启发进行透明初筛。
-- 要求 Codex 阅读可用证据后重新评分，避免仅凭关键词或题名推荐。
-- 默认只推荐评分不低于70分的5–10篇论文，允许少于5篇或零推荐。
-- 按 DOI 优先、规范化题名兜底的方式去重，已经推送的论文不会作为新论文重复发送。
-- 生成中文每日文献雷达、前三名推荐、研究灵感和专业术语双重解释。
-- 支持 WxPusher、Server酱和企业微信机器人，并在未配置推送时继续生成本地报告。
+## 快速开始
 
-## 运行环境
+需要 Python 3.10+。克隆本仓库后在项目目录执行命令，无需安装第三方包。新手见 [安装指南](references/installation_guide.md)。
 
-- Python 3.10 或更高版本。
-- 核心脚本只使用 Python 标准库，**不需要安装任何第三方依赖**。
-- 联网检索和消息推送需要运行环境能够访问相应学术接口与通知服务。
-- [OpenAlex API](https://help.openalex.org/api/) 支持匿名基础检索；需要更高调用额度时，可申请 API Key 并存入 `OPENALEX_API_KEY` 环境变量，也可用 `OPENALEX_MAILTO` 提供联系邮箱。OpenAlex 检索使用游标翻页，每条查询最多读取600条近期记录。
-- Crossref 只返回 `journal-article`。研究方向以会议成果为主时（如人工智能），必须用 `--sources` 启用 OpenAlex 或 Semantic Scholar，否则会议论文无法召回。
-- arXiv 不需要 API Key，但官方要求相邻请求间隔不少于 3 秒，超限会被限流。项目已内置该限速，单条查询最多读取 400 条近期记录；预印本一律明确标注为未经正式同行评议。
+### 1. 配置研究领域
 
-## 安装
-
-下面是快速安装方式。需要逐步截图式文字说明、安装检查、首次配置和常见问题时，请阅读[小白安装与使用指南](references/installation_guide.md)。
-
-可以克隆仓库：
+公开配置保持空白，不擅自使用示例方向。下面仅演示配置语法，请替换成自己的方向：
 
 ```powershell
-git clone https://github.com/TCcjx/research-paper-daily-push.git
-cd research-paper-daily-push
+python scripts/run_daily.py init-profile --name "时态知识图谱" --query '"temporal knowledge graph"' --topic "时态知识图谱=temporal knowledge graph,temporal reasoning" --source-preset computer_science --output config/my.local.json
 ```
 
-仓库没有第三方依赖，因此**不需要执行 `pip install`**。如果你习惯统一走安装流程，下面这条命令是安全的（它会安装 0 个包）：
+继续填写 JSON 的 research_context、priority_questions、查询同义词和领域方法词表。参考 [完整示例](examples/research_profile.temporal-kg.json) 与 [配置字段](references/profile_schema.md)。已配置文件不会被初始化命令覆盖。
+
+| 来源预设 | 来源 |
+| --- | --- |
+| general | Crossref、OpenAlex、arXiv |
+| computer_science | arXiv、Crossref、OpenAlex |
+| biomedical | Europe PMC、Crossref、bioRxiv |
+
+sources 非空时覆盖预设；命令行 `--sources arxiv,crossref` 优先。Semantic Scholar 可显式启用。任何预设都不保证穷尽覆盖，须按领域调整。
+
+### 2. 收集并查看发现简报
 
 ```powershell
-python -m pip install -r requirements.txt
+python scripts/run_daily.py collect --profile config/my.local.json
 ```
 
-也可以下载 ZIP，然后把整个 `research-paper-daily-push` 文件夹复制到 Codex 的 Skills 目录。
+控制台显示输出目录，默认 `data/runs/<配置与检索范围标识>/YYYY-MM-DD/`：
 
-## 配置研究方向
+| 文件 | 用途 |
+| --- | --- |
+| discovery.md | 直接阅读，明确标为未复核 |
+| review_queue.json | 候选摘要、元数据、热点线索与历史上下文 |
+| search_30d.json | 规范化样本及来源警告 |
+| ranked_30d.json | 全量初筛与排除理由，便于检查漏筛 |
 
-1. 在 [`references/research_topics.md`](references/research_topics.md) 中用自然语言填写研究对象、核心科学问题、优先级、偏好方法和排除规则。
-2. 按照 [`references/profile_schema.md`](references/profile_schema.md) 填写 `config/research_profile.json`，使检索和初筛规则可以被程序读取。
-3. 检查两个文件表达的研究方向是否一致。
-4. 配置完成后，将 `config/research_profile.json` 中的 `configured` 改为 `true`。
+一次抓取30天样本，本地优先今天和昨天；不足时加入7、14、30天内补充并单独标注。默认复核池50篇，与最终目标5篇分离。`--candidate-limit 100` 扩大复核池；`--max-results 3` 设置精选目标。
 
-公开模板默认留空，`configured` 为 `false` 时程序会停止检索。不想从零开始填写时，[`examples/`](examples/) 提供一份完整可用的示例：`research_profile.temporal-kg.json` 与配套的 `research_topics.temporal-kg.md`，对应「时态知识图谱推理为核心主线、大模型智能体为交叉场景」的方向，包含检索式、主题词组与权重、跨主题加分、期刊分层、排除词、强烈推荐条件、研究路线阶段和标签词表，可复制到自己的 `config/research_profile.json` 与 `references/research_topics.md` 后再按方向改词表。示例展示的是配置写法，不构成对研究方向的建议。
+初筛分只是元数据代理指标，低于70分仍可复核。默认场所策略 label_only，不因预印本或未进入目录而排除。[CCF目录](references/venue_catalog.md) 仅作背景，不替代单篇证据判断。
 
-请不要提交真实推送凭据（API Key、Token、Webhook 地址等只放环境变量）；示例中的研究主题与检索词是有意公开的样例，其余个人主题仍应留在本地。
+### 3. 复核并生成日报
 
-## 发表场所等级与权威性筛选
+在 Codex 中加载 Skill 后，可以说：“按我的配置运行论文雷达，复核重点论文并展示中文日报。”也可以自己填写复核数据：
 
-检索结果会自动标注论文发表场所的认可度等级。默认目录为《中国计算机学会推荐国际学术期刊会议目录》第七版（2026 年发布，含 2026-04-09 勘误），内置 183 条，已覆盖人工智能、数据库/数据挖掘/内容检索与交叉/综合/新兴三个领域的主要条目。目录与规则存放在 [`config/venue_ranking.json`](config/venue_ranking.json)，目录来源、覆盖范围与扩充方法见 [`references/venue_catalog.md`](references/venue_catalog.md)。
+```powershell
+python scripts/run_daily.py prepare --queue <运行目录>/review_queue.json --output <运行目录>/reviewed_articles.json
+```
 
-- 初筛的"论文质量"分项由场所等级驱动（CCF A/B/C 对应 95/85/74），并与研究配置中的期刊分层取较高值。
-- 默认启用 `authority_first` 权威性政策：预印本需相关性不低于 85 分、场所未经核实需不低于 80 分，才能进入复核队列；也可在配置中切换为更严格的 `strict_ccf_or_tier` 模式。
-- 满足强烈推荐条件时，还要求发表场所等级经过核实，否则降级为普通推荐并说明原因。
-- 目录未收录不等于低质量：未命中条目只标注"需要核实"，不会臆造等级；Findings/Workshop 等附属卷、同名简称歧义和作者自述场所均按未核实处理，同名简称存在期刊与会议歧义时取较低等级。
-- 复核队列与最终报告会输出"候选等级分布"和每篇论文的"认可度/等级"行，便于核对筛选依据。单独重排候选时可使用 `python scripts/rank_papers.py --input <候选.json> --output <结果.json>`，等级目录默认读取 `config/venue_ranking.json`，也可用 `--ranking` 指定其他文件。
+这一步只预填待编辑草稿，**不会自动阅读或总结论文**。检查完整队列后挑选重点，填写实际阅读的证据 URL、贡献、与已有工作的比较、发现、局限和评分。见 [复核数据约定](references/reviewed_schema.md)。未复核、缺证据、低于70分、重复论文或总分不一致会被严格校验阻止。
 
-## 配置 WxPusher 微信推送
+```powershell
+python scripts/run_daily.py deliver --profile config/my.local.json --reviewed <运行目录>/reviewed_articles.json --queue <运行目录>/review_queue.json --report <运行目录>/daily-report.md --skip-push
+```
 
-完整的应用创建、微信 ClawBot 绑定与激活、UID获取、环境变量设置、双端测试和故障排查步骤见 [`references/wxpusher_setup.md`](references/wxpusher_setup.md)。Windows 新手推荐使用其中的“从剪贴板自动读取”方法，避免手动粘贴时漏字符或复制进多余网页内容；检查过程不会回显真实 Token 和 UID。
+默认简报，精读用 `report_style: "detailed"`，关键术语双重解释用 `term_explanation_mode: "dual"`。不再强制七类研究启发或无依据的研究灵感。
 
-ClawBot 是 WxPusher 的额外接收渠道：绑定后项目仍使用原来的 `appToken + UID`，不需要配置新的 ClawBot Token。按照 WxPusher 当前规则，ClawBot 每次激活可在 24 小时内接收最多 10 次推送，过期或用完后需在微信会话中回复任意内容重新激活；详细限制请以 [WxPusher 官方文档](https://wxpusher.zjiecode.com/docs/)为准。
+`--skip-push` 只生成文件，不写交付历史。实际展示后增加 `--record-local-report` 确认本地交付，推进去重与研究记忆。再次把已交付论文作为新推荐会被阻止；重新生成旧报告仅用 `--skip-push`。
 
-配置后先进行本地检查：
+### 4. 跟踪与周报
+
+在配置中增加 watchlist 数组，每项为真实的 `{"doi": "10.xxxx/..."}` 或 `{"arxiv": "编号"}`。每次 collect 最多检查20篇明确关注及最近交付论文，跨越30天窗口；`--watch-limit 0` 关闭。旧历史缺少 arXiv ID 时补进 watchlist 才能跟踪版本。改题且没有共同标识的版本关联需人工核对。
+
+```powershell
+python scripts/run_daily.py weekly --profile config/my.local.json --output data/runs/weekly-report.md
+```
+
+配置、mode、sources 需与 collect 相同；无同范围观测时明确报错，未观测日不补零。
+
+## 可选微信推送
+
+按 [WxPusher设置](references/wxpusher_setup.md) 注入环境变量，本地检查：
 
 ```powershell
 python scripts/push_wechat.py --provider wxpusher --check-config
 ```
 
-确认无误后发送真实测试消息：
+明确授权真实发送后，将 deliver 的 `--skip-push` 换为 `--provider auto`，按 WxPusher、Server酱、企业微信顺序选择。无渠道仍生成本地报告。凭据只放环境变量，见 [.env.example](.env.example)；项目不会自动加载 .env。
+
+## 可靠性与边界
+
+- Crossref 同时检索期刊与会议，Europe PMC/Crossref 有界翻页；抓取上限见 [数据来源](references/data_sources.md)。宽查询截断时需缩小主题或拆分查询。
+- 缺源或截断会明确警告，且不判定升温。全部失败则退出，不能当成“今天无好论文”。
+- 引用增长仅比较同来源快照；新论文没有可比引用数据是正常情况。计数存在索引延迟。
+- 观测与交付分开保存；同日替换，保留90天，按配置/查询/来源隔离。
+- 主入口用数据锁阻止并发覆盖。进程崩溃留下 .lock 时，先确认旧进程已退出再手动移除。
+- 不自动创建定时任务。完整调度应包含 collect → 证据复核 → deliver；只调度 collect 仅产生发现简报。需明确时间、时区、在线设备和推送授权。
+- 部分发送失败不能视为全部成功；不自动无限重发。
+
+## 开发与验证
 
 ```powershell
-python scripts/push_wechat.py --provider wxpusher --test-message
+python -m unittest discover -s tests -v
+python -m compileall -q scripts
 ```
 
-第一条命令不会联网发送，也不会显示 Token 或 UID；第二条命令会产生真实外部推送。
+测试覆盖来源规范化、分页、部分/全部失败、广泛复核池、主题轮转、趋势基线、同源引用变化、更新跟踪、严格校验、去重与交付。测试不联网、不发消息。结构校验不能证明证据内容真实，最终仍需阅读。
 
-## 运行文献雷达
+本地配置推荐 `config/*.local.json`，已被忽略。data/observations.json、运行目录和缓存不提交；公开模板的交付历史与研究记忆保持为空，实际使用后的个人记录也不要提交。
 
-### 第一步：检索并生成复核队列
-
-```powershell
-python scripts/run_daily.py collect --mode all
-```
-
-结果默认写入 `data/runs/YYYY-MM-DD/review_queue.json`。该文件只包含元数据初筛候选，不能直接当作最终推荐。Codex 需要阅读摘要，并在必要时核对 DOI、出版商页面或全文，然后生成符合 `SKILL.md` 约定的 `reviewed_articles.json`。
-
-### 第二步：生成报告并推送
-
-```powershell
-python scripts/run_daily.py deliver --reviewed reviewed_articles.json --report daily-report.md --provider auto
-```
-
-当 `WXPUSHER_APP_TOKEN` 和 `WXPUSHER_UID` 均已配置时，`--provider auto` 会优先使用 WxPusher。如需明确限定 WxPusher，请改用 `--provider wxpusher`。
-
-只有报告已经在当前对话中真实展示时，才可以使用：
-
-```powershell
-python scripts/run_daily.py deliver --reviewed reviewed_articles.json --report daily-report.md --skip-push --record-local-report
-```
-
-该参数会把本地展示视为一次已确认交付，并写入去重历史和研究记忆。
-
-## 定时运行
-
-仓库不预设固定定时任务，因为执行时间、时区、运行设备和外部推送授权因用户而异。创建定时任务时，应明确指定：
-
-- 执行时间和时区；
-- 使用的研究配置与检索模式；
-- 是否授权自动推送；
-- 凭据如何安全注入；
-- 电脑关机或休眠时由哪台长期在线设备接替运行。
-
-## 开发与测试
-
-测试使用 Python 标准库的 `unittest`，不依赖任何第三方包：
-
-```powershell
-python -m unittest discover tests -v
-```
-
-也可以在仓库根目录运行单个测试模块：
-
-```powershell
-python -m unittest tests.test_profile_config -v
-```
-
-现有测试覆盖参数校验、六源检索与规范化、初筛评分、去重身份规则、报告校验、推送配置和研究记忆。推送相关测试不会发起真实网络请求；`--test-message` 才会产生真实外部推送。
-
-提交代码前请确认：全部测试通过、没有把真实凭据或研究主题写入仓库、新增脚本仍然只使用标准库。
-
-## 数据与隐私
-
-- `data/pushed_articles.json` 和 `data/research_memory.json` 在公开模板中为空。
-- Token、UID、SendKey 和 Webhook 只从环境变量读取。
-- 推送状态 JSON 不保存真实凭据。
-- `.env`、运行中间文件（`data/runs/`）和 Python 缓存（`__pycache__`）已被 `.gitignore` 忽略，不会误提交；交付状态文件在公开模板中保留为空。
-- 发布自己的分支或压缩包前，应再次检查报告、历史记录、本地路径、研究主题、Token 和 UID。
-
-## 开源许可
-
-本项目采用 MIT License。为保持许可证法律文本的准确性，根目录中的 [`LICENSE`](LICENSE) 保留标准英文原文；中文用户可阅读 [`LICENSE.zh-CN.md`](LICENSE.zh-CN.md) 参考译文，解释不一致时以英文原文为准。
+采用 [MIT License](LICENSE)，[中文参考译文](LICENSE.zh-CN.md)。
