@@ -31,7 +31,18 @@ class ParseArgsTests(unittest.TestCase):
         self.assertEqual(args.threshold, 70)
         self.assertEqual(args.min_results, 5)
         self.assertEqual(args.max_results, 10)
-        self.assertIn("openalex", args.sources)
+        self.assertEqual(args.sources, "europepmc,crossref,biorxiv,arxiv")
+
+    def test_opt_in_sources_are_off_by_default_but_still_acceptable(self) -> None:
+        default_sources = run_daily.parse_args(["collect"]).sources.split(",")
+        for source in ("openalex", "semanticscholar"):
+            self.assertNotIn(source, default_sources)
+        opted_in = run_daily.parse_args(
+            ["collect", "--sources", "openalex,semanticscholar,europepmc"]
+        )
+        self.assertEqual(
+            opted_in.sources, "openalex,semanticscholar,europepmc"
+        )
 
     def test_deliver_requires_reviewed_and_report(self) -> None:
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):

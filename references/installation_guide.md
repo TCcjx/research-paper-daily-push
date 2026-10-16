@@ -44,7 +44,7 @@ git --version
 
 ### 建议申请 Semantic Scholar API Key
 
-Semantic Scholar 允许不带 Key 检索，但匿名请求会与其他用户共享公共调用额度；访问繁忙时可能收到 `429` 限速响应。项目会继续使用其他数据源，不会因此让整次运行失败，但当天候选论文可能减少。
+`semanticscholar` 与 `openalex` 不在 `run_daily.py collect` 的默认来源里，因为匿名请求会与其他用户共享公共调用额度、繁忙时容易收到 `429`。需要覆盖会议论文时用 `--sources europepmc,crossref,openalex,semanticscholar,arxiv` 显式加回；Crossref 只返回 `journal-article`，不加回就拿不到会议成果。项目会继续使用其他数据源，不会因此让整次运行失败，但当天候选论文可能减少。
 
 计划每天定时运行时，建议在 [Semantic Scholar Academic Graph API](https://www.semanticscholar.org/product/api) 申请免费的 API Key，并把它保存为当前 Windows 用户的环境变量：
 

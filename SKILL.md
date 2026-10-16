@@ -17,7 +17,7 @@ description: 根据用户配置的研究方向，检索、复核、评分、去�
 
 ## 工作流程
 
-1. 运行 `python scripts/run_daily.py collect --mode <mode>`。`all` 使用默认查询，聚焦模式名称来自研究配置。命令会查询 Europe PMC、Crossref、Semantic Scholar、OpenAlex、bioRxiv 和 arXiv，合并重复记录，排除确认推送过的论文，按 `config/venue_ranking.json` 标注发表场所等级，并写入 `data/runs/YYYY-MM-DD/review_queue.json`。OpenAlex 可匿名检索，并使用游标读取每条查询最多600条近期记录；可选的 `OPENALEX_API_KEY` 和 `OPENALEX_MAILTO` 只能从环境变量读取，不能写入仓库或日志。
+1. 运行 `python scripts/run_daily.py collect --mode <mode>`。`all` 使用默认查询，聚焦模式名称来自研究配置。默认来源为 Europe PMC、Crossref、bioRxiv 和 arXiv；命令会合并重复记录，排除确认推送过的论文，按 `config/venue_ranking.json` 标注发表场所等级，并写入 `data/runs/YYYY-MM-DD/review_queue.json`。OpenAlex 与 Semantic Scholar 已实现但默认不启用（两者匿名共享配额，突发请求易收到 `429`），需要时用 `--sources europepmc,crossref,openalex,semanticscholar,arxiv` 显式加回。Crossref 只返回 `journal-article`，会议论文只能由这两个来源召回：研究方向以 AI 会议为主时必须显式加回，不能因为默认列表里没有就把会议论文缺失当成检索正常。OpenAlex 可匿名检索，并使用游标读取每条查询最多600条近期记录；可选的 `OPENALEX_API_KEY` 和 `OPENALEX_MAILTO` 只能从环境变量读取，不能写入仓库或日志。
 2. arXiv 只按提交时间倒序翻页（每条查询最多400条），日期窗口在本地切分：把 `submittedDate` 与布尔分组写进同一条查询会让 arXiv 稳定返回 0 条。相邻请求间隔不少于 3 秒，不重试到无限。arXiv 与正式出版记录合并时，以正式出版的期刊、DOI 和链接为准，只有没有正式出版证据时才保留预印本身份。
 3. 先建立近24小时优先的候选池。如果达到70分的初筛候选少于5篇，程序会按 7天→14天→30天 逐级扩大检索窗口，在不降低评分门槛的前提下尽量凑足候选；窗口到 30 天仍不足时如实输出，不为凑数降低标准。学术接口经常只提供日级日期，因此要把“24小时”视为优先近似窗口，并在报告中说明实际范围。
 4. 阅读限定长度的 `research_memory_context`、候选题名、摘要、元数据、评分证据、`venue_ranking` 等级标注和待核实提示。研究记忆只用于发现连续证据、未解决问题、研究空白和重复思路，不能当成用户明确偏好的证明。

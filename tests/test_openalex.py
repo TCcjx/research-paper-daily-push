@@ -154,16 +154,16 @@ class OpenAlexSearchTests(unittest.TestCase):
             )[0]
         self.assertIn("retraction", paper["article_type"])
 
-    def test_openalex_is_registered_as_a_default_source(self) -> None:
+    def test_openalex_stays_registered_but_is_opt_in(self) -> None:
         self.assertIn("openalex", search_papers.API_SOURCES)
         self.assertIs(
             search_papers.SOURCE_FUNCTIONS["openalex"],
             search_papers.search_openalex,
         )
 
-    def test_daily_collection_enables_openalex_by_default(self) -> None:
+    def test_daily_collection_does_not_enable_openalex_by_default(self) -> None:
         args = run_daily.parse_args(["collect"])
-        self.assertIn("openalex", args.sources.split(","))
+        self.assertNotIn("openalex", args.sources.split(","))
 
     def test_cursor_pagination_follows_next_cursor(self) -> None:
         def work(identifier: str) -> dict[str, object]:

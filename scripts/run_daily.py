@@ -176,7 +176,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     collect_parser = subparsers.add_parser("collect", help="检索、去重、评分并生成复核队列")
     collect_parser.add_argument("--mode", default="all", help="研究配置中定义的模式名称")
     collect_parser.add_argument("--profile", default=str(DEFAULT_PROFILE))
-    collect_parser.add_argument("--sources", default="europepmc,crossref,semanticscholar,openalex,biorxiv,arxiv")
+    # openalex 与 semanticscholar 覆盖会议论文，但匿名配额易触发 429，
+    # 因此不进入默认来源，需要时用 --sources 显式加回。
+    collect_parser.add_argument("--sources", default="europepmc,crossref,biorxiv,arxiv")
     collect_parser.add_argument("--history", default=str(DEFAULT_HISTORY))
     collect_parser.add_argument("--memory", default=str(DEFAULT_MEMORY))
     collect_parser.add_argument("--output-dir")

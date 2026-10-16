@@ -11,7 +11,7 @@
 ## 主要功能
 
 - 优先检索近24小时论文；高分候选不足时自动按 7天→14天→30天 逐级扩大检索窗口，在不降低评分门槛的前提下尽量凑足候选，仍不足时如实输出，不为凑数降低标准。
-- 使用 Europe PMC、Crossref、Semantic Scholar、OpenAlex、bioRxiv 和 arXiv 等学术接口；arXiv 按提交时间倒序翻页、在本地切分日期窗口，并遵守官方限速要求。
+- 支持 Europe PMC、Crossref、Semantic Scholar、OpenAlex、bioRxiv 和 arXiv 等学术接口；默认检索 Europe PMC、Crossref、bioRxiv 和 arXiv，OpenAlex 与 Semantic Scholar 因匿名共享配额容易 `429`，需用 `--sources` 显式启用。arXiv 按提交时间倒序翻页、在本地切分日期窗口，并遵守官方限速要求。
 - 自动标注论文发表场所的认可度等级（CCF 推荐国际学术期刊会议目录第七版），并按权威性政策优先保留高认可度论文；未命中目录只标"需要核实"，绝不臆造等级。
 - 按研究相关性、创新性、论文质量、方法学价值和研究启发进行透明初筛。
 - 要求 Codex 阅读可用证据后重新评分，避免仅凭关键词或题名推荐。
@@ -26,6 +26,7 @@
 - 核心脚本只使用 Python 标准库，**不需要安装任何第三方依赖**。
 - 联网检索和消息推送需要运行环境能够访问相应学术接口与通知服务。
 - [OpenAlex API](https://help.openalex.org/api/) 支持匿名基础检索；需要更高调用额度时，可申请 API Key 并存入 `OPENALEX_API_KEY` 环境变量，也可用 `OPENALEX_MAILTO` 提供联系邮箱。OpenAlex 检索使用游标翻页，每条查询最多读取600条近期记录。
+- Crossref 只返回 `journal-article`。研究方向以会议成果为主时（如人工智能），必须用 `--sources` 启用 OpenAlex 或 Semantic Scholar，否则会议论文无法召回。
 - arXiv 不需要 API Key，但官方要求相邻请求间隔不少于 3 秒，超限会被限流。项目已内置该限速，单条查询最多读取 400 条近期记录；预印本一律明确标注为未经正式同行评议。
 
 ## 安装
