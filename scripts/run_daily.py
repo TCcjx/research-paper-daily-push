@@ -93,11 +93,14 @@ def collect_stage(args: argparse.Namespace) -> Path:
             "threshold": args.threshold,
             "maximum": args.max_results,
             "source_counts": raw.get("source_counts") or {},
+            "venue_distribution": ranked.get("venue_distribution") or {},
+            "authority_policy": ranked.get("authority_policy") or {},
             "warnings": warnings,
         },
         "review_requirement": (
             "这些是元数据初筛候选，不是最终推送结果。Codex 必须阅读可用摘要，并在重要结论不充分时核对出版商页面/全文；"
-            "逐项复核评分，排除证据不足或弱相关论文，再写入 reviewed_articles.json。"
+            "逐项复核评分，核对 venue_ranking 给出的发表场所等级（未命中目录时只能标“需要核实”，不得臆造等级），"
+            "排除证据不足或弱相关论文，再写入 reviewed_articles.json。"
         ),
         "research_memory_context": build_context(load_memory(args.memory), recent=10),
         "scoring_formula": ranked.get("formula"),
@@ -169,7 +172,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     collect_parser = subparsers.add_parser("collect", help="检索、去重、评分并生成复核队列")
     collect_parser.add_argument("--mode", default="all", help="研究配置中定义的模式名称")
     collect_parser.add_argument("--profile", default=str(DEFAULT_PROFILE))
-    collect_parser.add_argument("--sources", default="europepmc,crossref,semanticscholar,openalex,biorxiv")
+    collect_parser.add_argument("--sources", default="europepmc,crossref,semanticscholar,openalex,biorxiv,arxiv")
     collect_parser.add_argument("--history", default=str(DEFAULT_HISTORY))
     collect_parser.add_argument("--memory", default=str(DEFAULT_MEMORY))
     collect_parser.add_argument("--output-dir")

@@ -1,0 +1,1415 @@
+{
+  "catalog": {
+    "name": "中国计算机学会推荐国际学术会议和期刊目录",
+    "version": "第七版（2026）",
+    "released": "2026-03-31",
+    "corrigendum": "2026-04-09",
+    "official_page": "https://www.ccf.org.cn/Academic_Evaluation/By_category/",
+    "domains_included": [
+      "人工智能（完整）",
+      "数据库 / 数据挖掘 / 内容检索（完整）",
+      "交叉 / 综合 / 新兴（仅收录与信息服务、大数据相关的条目）"
+    ],
+    "completeness_note": "本表有意不完整：未收录体系结构、网络、安全、软件工程、理论、图形学、人机交互等领域，以及交叉领域的多数条目。未匹配到本表不等于论文质量低或不属于 CCF 目录，只能标为“需要核实”，禁止据此判定为低等级。",
+    "verification_note": "等级取自官方第七版目录；期刊与会议全名取自中国计算机学会各领域页面。个别条目在两版之间更名或调整等级时以官方 PDF 为准，存疑时应核对 venue 官网后再写入报告。"
+  },
+  "scoring": {
+    "ccf": {
+      "A": 95,
+      "B": 85,
+      "C": 74
+    },
+    "formal_unlisted": 65,
+    "venue_missing": 48,
+    "preprint": 58,
+    "preprint_with_reported_venue": 72,
+    "citation_bonuses": [
+      [
+        200,
+        8
+      ],
+      [
+        50,
+        5
+      ],
+      [
+        10,
+        2
+      ]
+    ],
+    "review_article_cap": 82,
+    "abstract_missing_penalty": 15
+  },
+  "policy": {
+    "mode": "authority_first",
+    "modes": {
+      "label_only": "只标注等级与来源，不额外排除论文。",
+      "authority_first": "预印本和未收录 venue 只有在相关性达到阈值时才进入复核队列。",
+      "strict_ccf_or_tier": "只保留命中 CCF 目录或配置期刊分层的论文，预印本一律排除。"
+    },
+    "preprint_min_relevance": 85,
+    "unlisted_venue_min_relevance": 80,
+    "strong_recommendation_requires_verified_venue": true
+  },
+  "labels": {
+    "ccf_journal": "CCF-{ccf} 期刊",
+    "ccf_conference": "CCF-{ccf} 会议",
+    "tiered_journal": "配置分层期刊",
+    "preprint": "预印本（无 CCF 等级）",
+    "preprint_claimed_venue": "预印本，作者自述录用或发表于 {venue}",
+    "unlisted": "正规出版物，未收录于内置目录（需核实）",
+    "missing": "venue 信息缺失",
+    "ambiguous": "名称或简称命中多个目录条目，等级待核实",
+    "companion": "附属卷（Findings/Workshop 等），CCF 目录未单列，等级需核实"
+  },
+  "conflicts": {
+    "aaai": [
+      "aaai acm conference on ai ethics and society"
+    ],
+    "ijcai": [
+      "international joint symposium on artificial intelligence"
+    ]
+  },
+  "conflicts_note": "简称阻塞表：当某个简称出现在其他出版场所名称中时，禁止用该简称匹配等级目录。键为简称，值为规范化后的阻塞名称片段（作为子串匹配）。",
+  "venues": [
+    {
+      "name": "Artificial Intelligence",
+      "abbr": "AI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "A"
+    },
+    {
+      "name": "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+      "abbr": "TPAMI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "A"
+    },
+    {
+      "name": "International Journal of Computer Vision",
+      "abbr": "IJCV",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "A"
+    },
+    {
+      "name": "Journal of Machine Learning Research",
+      "abbr": "JMLR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "A"
+    },
+    {
+      "name": "ACM Transactions on Applied Perception",
+      "abbr": "TAP",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Autonomous Agents and Multi-Agent Systems",
+      "abbr": "AAMAS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Computational Linguistics",
+      "abbr": "CL",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Computer Vision and Image Understanding",
+      "abbr": "CVIU",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Data & Knowledge Engineering",
+      "abbr": "DKE",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Evolutionary Computation",
+      "abbr": "EC",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Affective Computing",
+      "abbr": "TAC",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE/ACM Transactions on Audio, Speech and Language Processing",
+      "abbr": "TASLP",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Cybernetics",
+      "abbr": "TCyB",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Evolutionary Computation",
+      "abbr": "TEC",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Fuzzy Systems",
+      "abbr": "TFS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Neural Networks and Learning Systems",
+      "abbr": "TNNLS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "International Journal of Approximate Reasoning",
+      "abbr": "IJAR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Journal of Artificial Intelligence Research",
+      "abbr": "JAIR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Journal of Automated Reasoning",
+      "abbr": "JAR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Journal of Speech, Language, and Hearing Research",
+      "abbr": "JSLHR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Machine Learning",
+      "abbr": "ML",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Neural Computation",
+      "abbr": "NC",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Neural Networks",
+      "abbr": "NN",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Pattern Recognition",
+      "abbr": "PR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Transactions of the Association for Computational Linguistics",
+      "abbr": "TACL",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "ACM Transactions on Asian and Low-Resource Language Information Processing",
+      "abbr": "TALLIP",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Applied Intelligence",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Artificial Intelligence in Medicine",
+      "abbr": "AIM",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Artificial Life",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Computational Intelligence",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Computer Speech & Language",
+      "abbr": "CSL",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Connection Science",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Decision Support Systems",
+      "abbr": "DSS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Engineering Applications of Artificial Intelligence",
+      "abbr": "EAAI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Expert Systems",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Expert Systems with Applications",
+      "abbr": "ESWA",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Fuzzy Sets and Systems",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IEEE Transactions on Games",
+      "abbr": "TG",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IET Computer Vision",
+      "abbr": "IET-CVI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IET Signal Processing",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Image and Vision Computing",
+      "abbr": "IVC",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Intelligent Data Analysis",
+      "abbr": "IDA",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Computational Intelligence and Applications",
+      "abbr": "IJCIA",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Intelligent Systems",
+      "abbr": "IJIS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Neural Systems",
+      "abbr": "IJNS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Pattern Recognition and Artificial Intelligence",
+      "abbr": "IJPRAI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Uncertainty, Fuzziness and Knowledge-Based Systems",
+      "abbr": "IJUFKS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal on Document Analysis and Recognition",
+      "abbr": "IJDAR",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Journal of Experimental and Theoretical Artificial Intelligence",
+      "abbr": "JETAI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Knowledge-Based Systems",
+      "abbr": "KBS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Machine Translation",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Machine Vision and Applications",
+      "abbr": "MVA",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Natural Computing",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Natural Language Engineering",
+      "abbr": "NLE",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Neural Computing and Applications",
+      "abbr": "NCA",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Neural Processing Letters",
+      "abbr": "NPL",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Neurocomputing",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Pattern Analysis and Applications",
+      "abbr": "PAA",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Pattern Recognition Letters",
+      "abbr": "PRL",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Soft Computing",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Web Intelligence",
+      "abbr": "WI",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM Transactions on Interactive Intelligent Systems",
+      "abbr": "TIIS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM Transactions on Evolutionary Learning and Optimization",
+      "abbr": "TELO",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM Journal on Autonomous Transportation Systems",
+      "abbr": "JATS",
+      "kind": "journal",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "AAAI Conference on Artificial Intelligence",
+      "abbr": "AAAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A",
+      "aliases": [
+        "Proceedings of the AAAI Conference on Artificial Intelligence"
+      ]
+    },
+    {
+      "name": "Conference on Neural Information Processing Systems",
+      "abbr": "NeurIPS",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A",
+      "aliases": [
+        "Advances in Neural Information Processing Systems",
+        "NIPS"
+      ]
+    },
+    {
+      "name": "Annual Meeting of the Association for Computational Linguistics",
+      "abbr": "ACL",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A",
+      "aliases": [
+        "Proceedings of the Annual Meeting of the Association for Computational Linguistics"
+      ]
+    },
+    {
+      "name": "IEEE/CVF Computer Vision and Pattern Recognition Conference",
+      "abbr": "CVPR",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A",
+      "aliases": [
+        "Proceedings of the IEEE Computer Society Conference on Computer Vision and Pattern Recognition"
+      ]
+    },
+    {
+      "name": "International Conference on Computer Vision",
+      "abbr": "ICCV",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A"
+    },
+    {
+      "name": "International Conference on Machine Learning",
+      "abbr": "ICML",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A",
+      "aliases": [
+        "Proceedings of the International Conference on Machine Learning"
+      ]
+    },
+    {
+      "name": "International Conference on Learning Representations",
+      "abbr": "ICLR",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "A",
+      "aliases": [
+        "Proceedings of the International Conference on Learning Representations"
+      ]
+    },
+    {
+      "name": "Annual Conference on Computational Learning Theory",
+      "abbr": "COLT",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Conference on Empirical Methods in Natural Language Processing",
+      "abbr": "EMNLP",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B",
+      "aliases": [
+        "Proceedings of the Conference on Empirical Methods in Natural Language Processing"
+      ]
+    },
+    {
+      "name": "European Conference on Artificial Intelligence",
+      "abbr": "ECAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "European Conference on Computer Vision",
+      "abbr": "ECCV",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE International Conference on Robotics and Automation",
+      "abbr": "ICRA",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Automated Planning and Scheduling",
+      "abbr": "ICAPS",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Case-Based Reasoning",
+      "abbr": "ICCBR",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Computational Linguistics",
+      "abbr": "COLING",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Principles of Knowledge Representation and Reasoning",
+      "abbr": "KR",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Conference on Uncertainty in Artificial Intelligence",
+      "abbr": "UAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "International Joint Conference on Autonomous Agents and Multi-Agent Systems",
+      "abbr": "AAMAS",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "Parallel Problem Solving from Nature",
+      "abbr": "PPSN",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B"
+    },
+    {
+      "name": "North American Chapter of the Association for Computational Linguistics",
+      "abbr": "NAACL",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B",
+      "aliases": [
+        "Proceedings of the North American Chapter of the Association for Computational Linguistics"
+      ]
+    },
+    {
+      "name": "International Joint Conference on Artificial Intelligence",
+      "abbr": "IJCAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "B",
+      "aliases": [
+        "Proceedings of the International Joint Conference on Artificial Intelligence"
+      ]
+    },
+    {
+      "name": "International Conference on Artificial Intelligence and Statistics",
+      "abbr": "AISTATS",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C",
+      "aliases": [
+        "Proceedings of Machine Learning Research"
+      ]
+    },
+    {
+      "name": "Asian Conference on Computer Vision",
+      "abbr": "ACCV",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Asian Conference on Machine Learning",
+      "abbr": "ACML",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "British Machine Vision Conference",
+      "abbr": "BMVC",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "CCF International Conference on Natural Language Processing and Chinese Computing",
+      "abbr": "NLPCC",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Conference on Computational Natural Language Learning",
+      "abbr": "CoNLL",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Genetic and Evolutionary Computation Conference",
+      "abbr": "GECCO",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IEEE International Conference on Tools with Artificial Intelligence",
+      "abbr": "ICTAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IEEE/RSJ International Conference on Intelligent Robots and Systems",
+      "abbr": "IROS",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Algorithmic Learning Theory",
+      "abbr": "ALT",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Artificial Neural Networks",
+      "abbr": "ICANN",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IEEE International Conference on Automatic Face and Gesture Recognition",
+      "abbr": "FG",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Document Analysis and Recognition",
+      "abbr": "ICDAR",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Inductive Logic Programming",
+      "abbr": "ILP",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Knowledge Science, Engineering and Management",
+      "abbr": "KSEM",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Neural Information Processing",
+      "abbr": "ICONIP",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Pattern Recognition",
+      "abbr": "ICPR",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Joint Conference on Biometrics",
+      "abbr": "IJCB",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Joint Conference on Neural Networks",
+      "abbr": "IJCNN",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "Pacific Rim International Conference on Artificial Intelligence",
+      "abbr": "PRICAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "IEEE Congress on Evolutionary Computation",
+      "abbr": "CEC",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Distributed Artificial Intelligence",
+      "abbr": "DAI",
+      "kind": "conference",
+      "domain": "人工智能",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM Transactions on Database Systems",
+      "abbr": "TODS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "ACM Transactions on Information Systems",
+      "abbr": "TOIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "IEEE Transactions on Knowledge and Data Engineering",
+      "abbr": "TKDE",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "The VLDB Journal",
+      "abbr": "VLDBJ",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "ACM Transactions on Knowledge Discovery from Data",
+      "abbr": "TKDD",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "ACM Transactions on the Web",
+      "abbr": "TWEB",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Advanced Engineering Informatics",
+      "abbr": "AEI",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Data & Knowledge Engineering",
+      "abbr": "DKE",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Data Mining and Knowledge Discovery",
+      "abbr": "DMKD",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "European Journal of Information Systems",
+      "abbr": "EJIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "GeoInformatica",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Information Processing and Management",
+      "abbr": "IPM",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Information Sciences",
+      "abbr": "",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Information Systems",
+      "abbr": "IS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Journal of the Association for Information Science and Technology",
+      "abbr": "JASIST",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Journal of Web Semantics",
+      "abbr": "JWS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Knowledge and Information Systems",
+      "abbr": "KAIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Data Science and Engineering",
+      "abbr": "DSE",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Distributed and Parallel Databases",
+      "abbr": "DPD",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Information & Management",
+      "abbr": "I&M",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Information Processing Letters",
+      "abbr": "IPL",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Information Retrieval",
+      "abbr": "IR",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Cooperative Information Systems",
+      "abbr": "IJCIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Geographical Information Science",
+      "abbr": "IJGIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Intelligent Systems",
+      "abbr": "IJIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal of Knowledge Management",
+      "abbr": "IJKM",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Journal on Semantic Web and Information Systems",
+      "abbr": "IJSWIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Journal of Computer Information Systems",
+      "abbr": "JCIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Journal of Database Management",
+      "abbr": "JDM",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Journal of Global Information Technology Management",
+      "abbr": "JGITM",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Journal of Intelligent Information Systems",
+      "abbr": "JIIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "The Journal of Strategic Information Systems",
+      "abbr": "JSIS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM Transactions on Intelligent Systems and Technology",
+      "abbr": "TIST",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM Transactions on Recommender Systems",
+      "abbr": "TORS",
+      "kind": "journal",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "ACM SIGMOD Conference",
+      "abbr": "SIGMOD",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "ACM SIGKDD Conference on Knowledge Discovery and Data Mining",
+      "abbr": "SIGKDD",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A",
+      "aliases": [
+        "KDD",
+        "SIGKDD",
+        "ACM KDD",
+        "Proceedings of the ACM SIGKDD International Conference on Knowledge Discovery and Data Mining",
+        "Knowledge Discovery and Data Mining"
+      ]
+    },
+    {
+      "name": "IEEE International Conference on Data Engineering",
+      "abbr": "ICDE",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "International ACM SIGIR Conference on Research and Development in Information Retrieval",
+      "abbr": "SIGIR",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A",
+      "aliases": [
+        "Proceedings of the International ACM SIGIR Conference on Research and Development in Information Retrieval"
+      ]
+    },
+    {
+      "name": "International Conference on Very Large Data Bases",
+      "abbr": "VLDB",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "A"
+    },
+    {
+      "name": "ACM International Conference on Information and Knowledge Management",
+      "abbr": "CIKM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B",
+      "aliases": [
+        "Proceedings of the ACM International Conference on Information and Knowledge Management"
+      ]
+    },
+    {
+      "name": "ACM International Conference on Web Search and Data Mining",
+      "abbr": "WSDM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "ACM SIGMOD-SIGACT-SIGAI Symposium on Principles of Database Systems",
+      "abbr": "PODS",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Database Systems for Advanced Applications",
+      "abbr": "DASFAA",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "European Conference on Machine Learning and Principles and Practice of Knowledge Discovery in Databases",
+      "abbr": "ECML-PKDD",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE International Semantic Web Conference",
+      "abbr": "ISWC",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B",
+      "aliases": [
+        "Proceedings of the International Semantic Web Conference",
+        "International Semantic Web Conference"
+      ]
+    },
+    {
+      "name": "IEEE International Conference on Data Mining",
+      "abbr": "ICDM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Database Theory",
+      "abbr": "ICDT",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "International Conference on Extending Database Technology",
+      "abbr": "EDBT",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Conference on Innovative Data Systems Research",
+      "abbr": "CIDR",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "SIAM International Conference on Data Mining",
+      "abbr": "SDM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "ACM Conference on Recommender Systems",
+      "abbr": "RecSys",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Web Information Systems Engineering",
+      "abbr": "WISE",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "B"
+    },
+    {
+      "name": "Asia Pacific Web Conference",
+      "abbr": "APWeb",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Database and Expert Systems Applications",
+      "abbr": "DEXA",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "European Conference on Information Retrieval",
+      "abbr": "ECIR",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Extended Semantic Web Conference",
+      "abbr": "ESWC",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Workshop on Web and Databases",
+      "abbr": "WebDB",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Conceptual Modeling",
+      "abbr": "ER",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Mobile Data Management",
+      "abbr": "MDM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Scientific and Statistical Database Management",
+      "abbr": "SSDBM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Web Age Information Management",
+      "abbr": "WAIM",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Symposium on Spatial and Temporal Databases",
+      "abbr": "SSTD",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Pacific-Asia Conference on Knowledge Discovery and Data Mining",
+      "abbr": "PAKDD",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "International Conference on Advanced Data Mining and Applications",
+      "abbr": "ADMA",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Web Information Systems and Applications",
+      "abbr": "WISA",
+      "kind": "conference",
+      "domain": "数据库 / 数据挖掘 / 内容检索",
+      "ccf": "C"
+    },
+    {
+      "name": "Journal of the ACM",
+      "abbr": "JACM",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "A"
+    },
+    {
+      "name": "Proceedings of the IEEE",
+      "abbr": "Proc. IEEE",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "A"
+    },
+    {
+      "name": "Science China Information Sciences",
+      "abbr": "SCIS",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "A"
+    },
+    {
+      "name": "Journal of Computer Science and Technology",
+      "abbr": "JCST",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "B"
+    },
+    {
+      "name": "World Wide Web",
+      "abbr": "WWW",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "B",
+      "aliases": [
+        "The Web Conference",
+        "Proceedings of the ACM Web Conference",
+        "ACM Web Conference"
+      ]
+    },
+    {
+      "name": "Frontiers of Computer Science",
+      "abbr": "FCS",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Big Data",
+      "abbr": "TBD",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "B"
+    },
+    {
+      "name": "IEEE Transactions on Computational Social Systems",
+      "abbr": "TCSS",
+      "kind": "journal",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "B"
+    },
+    {
+      "name": "International World Wide Web Conference",
+      "abbr": "WWW",
+      "kind": "conference",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "A",
+      "aliases": [
+        "The Web Conference",
+        "Proceedings of the ACM Web Conference",
+        "ACM Web Conference"
+      ]
+    },
+    {
+      "name": "IEEE International Conference on Big Data",
+      "abbr": "IEEE BigData",
+      "kind": "conference",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "C"
+    },
+    {
+      "name": "IEEE International Conference on Systems, Man, and Cybernetics",
+      "abbr": "SMC",
+      "kind": "conference",
+      "domain": "交叉 / 综合 / 新兴",
+      "ccf": "C"
+    }
+  ]
+}

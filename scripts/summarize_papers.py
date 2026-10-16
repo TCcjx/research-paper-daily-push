@@ -21,6 +21,15 @@ REQUIRED_INSPIRATION = (
     "limitations_validation",
 )
 
+VENUE_STATUSES = {
+    "ccf_listed",
+    "preprint",
+    "preprint_claimed_venue",
+    "unlisted",
+    "missing",
+    "unknown",
+}
+
 
 def _list(value: Any) -> list[str]:
     if isinstance(value, list):
@@ -34,6 +43,20 @@ def _term_explanations(value: Any) -> list[dict[str, Any]]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, dict)]
+
+
+def _venue_ranking(article: dict[str, Any]) -> dict[str, Any]:
+    value = article.get("venue_ranking")
+    return value if isinstance(value, dict) else {}
+
+
+def _venue_line(article: dict[str, Any]) -> str:
+    venue = _venue_ranking(article)
+    label = clean_text(venue.get("label"))
+    if not label:
+        return ""
+    notes = _list(venue.get("needs_verification"))[:1]
+    return f"- 认可度/等级：{label}" + (f"（{notes[0]}）" if notes else "")
 
 
 def validate_article(
@@ -97,6 +120,21 @@ def validate_article(
         errors.append(f"{prefix}.tags 必须包含1–8个聚焦标签")
     if strict and article.get("score_status") != "evidence_reviewed":
         errors.append(f"Codex 核对摘要或全文后，{prefix}.score_status 必须设为 evidence_reviewed")
+    if article.get("venue_ranking") is not None:
+        venue = _venue_ranking(article)
+        if not isinstance(article.get("venue_ranking"), dict):
+            errors.append(f"{prefix}.venue_ranking 必须是对象")
+        else:
+            if not clean_text(venue.get("label")):
+                errors.append(f"{prefix}.venue_ranking.label 不能为空")
+            ccf = clean_text(venue.get("ccf"))
+            if ccf and ccf not in {"A", "B", "C"}:
+                errors.append(f"{prefix}.venue_ranking.ccf 只能是 A、B 或 C；不确定时留空并写进 needs_verification")
+            status = clean_text(venue.get("status"))
+            if status and status not in VENUE_STATUSES:
+                errors.append(f"{prefix}.venue_ranking.status 只能是 {', '.join(sorted(VENUE_STATUSES))}")
+            if ccf and not venue.get("verified_venue"):
+                errors.append(f"{prefix}.venue_ranking 标注了 CCF 等级但 verified_venue 为假，需先核实出版场所")
     if article.get("strong_recommendation") and len(_list(article.get("strong_recommendation_reasons"))) < 1:
         errors.append(f"强烈推荐时必须填写 {prefix}.strong_recommendation_reasons")
     return errors
@@ -127,12 +165,14 @@ def render_article(article: dict[str, Any], rank: int) -> str:
         tag if str(tag).startswith("#") else f"#{clean_text(tag).replace(' ', '')}"
         for tag in _list(article.get("tags"))
     )
+    venue_line = _venue_line(article)
     sections = [
         heading,
         "",
         f"**英文原题：** {clean_text(article['title'])}",
         "",
         f"- 期刊：{clean_text(article['journal'])}",
+        *([venue_line] if venue_line else []),
         f"- 发表日期：{clean_text(article['publication_date'])}",
         f"- DOI：{doi}",
         f"- 论文链接：{clean_text(article['url'])}",
@@ -184,6 +224,39 @@ def render_article(article: dict[str, Any], rank: int) -> str:
     return "\n".join(sections)
 
 
+def render_venue_distribution(distribution: Any) -> str:
+    if not isinstance(distribution, dict):
+        return ""
+    counts = distribution.get("counts")
+    if not isinstance(counts, dict):
+        return ""
+
+    def value(key: str) -> int:
+        try:
+            return int(counts.get(key) or 0)
+        except (TypeError, ValueError):
+            return 0
+
+    order = (
+        ("ccf_A", "CCF A"),
+        ("ccf_B", "CCF B"),
+        ("ccf_C", "CCF C"),
+        ("preprint", "预印本"),
+        ("unlisted", "正规出版但未收录目录"),
+        ("missing", "出版场所待核实"),
+    )
+    pieces = [f"{name} {value(key)} 篇" for key, name in order if value(key)]
+    if not pieces:
+        return ""
+    line = "等级分布：" + "、".join(pieces)
+    catalog = clean_text(distribution.get("catalog_name"))
+    version = clean_text(distribution.get("catalog_version"))
+    if catalog and version:
+        line += f"（依据：{catalog} {version}）"
+    note = clean_text(distribution.get("completeness_note"))
+    return line + (f"  \n说明：{note}" if note else "")
+
+
 def render_report(payload: dict[str, Any], strict: bool = True) -> str:
     articles = payload.get("articles") or []
     if not isinstance(articles, list):
@@ -217,6 +290,9 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         f"最终推荐：{len(articles)}篇",
         "",
     ]
+    venue_summary = render_venue_distribution(metadata.get("venue_distribution"))
+    if venue_summary:
+        parts.extend([venue_summary, ""])
     warnings = _list(metadata.get("warnings"))
     if warnings:
         parts.extend(["> 检索提示：" + "；".join(warnings), ""])

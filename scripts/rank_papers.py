@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import sys
 from typing import Any
 
 from common import (
@@ -15,9 +16,19 @@ from common import (
     integer_range,
     load_json,
     normalize_doi,
+    unique_strings,
     utc_now_iso,
 )
 from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, named_term_groups, topic_groups
+from venue_ranking import (
+    DEFAULT_RANKING,
+    VenueRankingError,
+    apply_policy,
+    load_ranking,
+    quality_score as venue_quality_score,
+    summarize_queue,
+)
+from venue_ranking import classify as classify_venue
 
 WEIGHTS = {
     "relevance": 0.40,
@@ -134,6 +145,18 @@ def configured_quality_tiers(profile: dict[str, Any]) -> dict[str, set[str]]:
     return tiers
 
 
+def configured_tier_score(paper: dict[str, Any], profile: dict[str, Any]) -> int | None:
+    """只有命中研究配置里人工维护的期刊分层时才返回分层分，供目录评分回退使用。"""
+    journal = normalize_journal(clean_text(paper.get("journal")))
+    if not journal:
+        return None
+    tiers = configured_quality_tiers(profile)
+    for tier, score in (("tier_1", 93), ("tier_2", 84), ("tier_3", 74)):
+        if journal in tiers[tier]:
+            return score
+    return None
+
+
 def score_quality(paper: dict[str, Any], profile: dict[str, Any]) -> tuple[int, list[str]]:
     journal = normalize_journal(clean_text(paper.get("journal")))
     article_type = clean_text(paper.get("article_type")).casefold()
@@ -230,12 +253,17 @@ def strong_recommendation(
     return bool(reasons), reasons
 
 
-def rank_one(paper: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
+def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, Any] | None = None) -> dict[str, Any]:
     text = f" {paper.get('title', '')} {paper.get('abstract', '')} ".casefold()
     relevance, topics, relevance_evidence = score_relevance(text, profile)
     methods = matched_methods(text, profile)
     novelty, novelty_evidence = score_novelty(text, methods, topics)
-    quality, quality_evidence = score_quality(paper, profile)
+    classification = classify_venue(paper, ranking) if ranking else None
+    tier = configured_tier_score(paper, profile)
+    if classification is not None:
+        quality, quality_evidence = venue_quality_score(classification, paper, ranking, tier)
+    else:
+        quality, quality_evidence = score_quality(paper, profile)
     methodology, methodology_evidence = score_methodology(paper, text, methods)
     inspiration, inspiration_evidence = score_inspiration(relevance, methods, topics)
     component_scores = {
@@ -247,11 +275,27 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
     }
     score = round(sum(component_scores[key] * WEIGHTS[key] for key in WEIGHTS))
     reasons = exclusion_reasons(paper, text, relevance, profile)
+    if classification is not None:
+        reasons.extend(apply_policy(paper, classification, relevance, ranking, has_configured_tier=tier is not None))
     if not paper.get("abstract"):
         score = min(score, 72)
     strong, strong_reasons = strong_recommendation(topics, methods, score, profile)
+    if (
+        strong
+        and classification is not None
+        and (ranking.get("policy") or {}).get("strong_recommendation_requires_verified_venue")
+        and not classification.get("verified_venue")
+    ):
+        strong = False
+        strong_reasons = [
+            "强烈推荐条件已满足，但发表场所等级未经核实；核实 CCF 或期刊分层后再升级为强烈推荐"
+        ]
     ranked = dict(paper)
     ranked["doi"] = normalize_doi(ranked.get("doi"))
+    if classification is not None:
+        ranked["needs_verification"] = unique_strings(
+            (ranked.get("needs_verification") or []) + list(classification.get("needs_verification") or [])
+        )
     ranked.update(
         {
             "recommendation_score": score,
@@ -260,6 +304,9 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
             "score_weights": WEIGHTS,
             "matched_topics": topics,
             "matched_methods": methods,
+            "venue_ranking": classification
+            if classification is not None
+            else {"status": "unknown", "label": "等级目录未加载", "ccf": None, "needs_verification": []},
             "score_evidence": {
                 "relevance": relevance_evidence,
                 "novelty": novelty_evidence,
@@ -277,10 +324,15 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any]) -> dict[str, Any]:
 
 
 def rank_payload(
-    payload: Any, profile: dict[str, Any], *, threshold: int = 70, maximum: int = 10
+    payload: Any,
+    profile: dict[str, Any],
+    *,
+    ranking: dict[str, Any] | None = None,
+    threshold: int = 70,
+    maximum: int = 10,
 ) -> dict[str, Any]:
     papers = extract_papers(payload)
-    ranked = [rank_one(paper, profile) for paper in papers]
+    ranked = [rank_one(paper, profile, ranking) for paper in papers]
     ranked.sort(key=lambda item: (item["excluded"], -item["recommendation_score"], item.get("title", "")))
     recommendations = [
         item for item in ranked if not item["excluded"] and item["recommendation_score"] >= threshold
@@ -294,6 +346,8 @@ def rank_payload(
         "recommended_count": len(recommendations),
         "formula": "relevance*0.40 + novelty*0.20 + quality*0.15 + methodology*0.15 + inspiration*0.10",
         "important_note": "分数是配置驱动的元数据初筛分；最终推送前必须阅读可用证据并重新评价各分项。",
+        "authority_policy": (ranking.get("policy") or {}) if ranking else {},
+        "venue_distribution": summarize_queue(recommendations, ranking) if ranking else {},
         "recommendations": recommendations,
         "ranked_papers": ranked,
     }
@@ -304,6 +358,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--input", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--profile", default=str(DEFAULT_PROFILE))
+    parser.add_argument("--ranking", default=str(DEFAULT_RANKING))
     parser.add_argument(
         "--threshold",
         type=integer_range(0, 100, "分"),
@@ -327,9 +382,16 @@ def main(argv: list[str] | None = None) -> int:
         profile = load_profile(args.profile)
     except ProfileError as exc:
         raise SystemExit(str(exc)) from exc
+    try:
+        ranking = load_ranking(args.ranking)
+    except VenueRankingError as exc:
+        # 等级目录缺失时评分仍可运行，但必须让使用者看到退化提示，不能假装已完成等级标注。
+        ranking = None
+        print(f"警告：发表场所等级目录不可用，本次只按配置分层评分：{exc}", file=sys.stderr)
     result = rank_payload(
         load_json(args.input, {}),
         profile,
+        ranking=ranking,
         threshold=args.threshold,
         maximum=args.max_results,
     )
@@ -338,6 +400,12 @@ def main(argv: list[str] | None = None) -> int:
         f"共初筛 {result['screened_count']} 篇论文；"
         f"其中 {result['recommended_count']} 篇达到初步阈值。"
     )
+    distribution = (result.get("venue_distribution") or {}).get("counts") or {}
+    if distribution:
+        print(
+            "候选等级分布："
+            + "、".join(f"{key} {value} 篇" for key, value in distribution.items() if value)
+        )
     return 0
 
 

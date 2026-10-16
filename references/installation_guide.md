@@ -58,6 +58,10 @@ Semantic Scholar 允许不带 Key 检索，但匿名请求会与其他用户共�
 
 设置完成后，应完全关闭并重新打开 PowerShell 和 Codex。真实 API Key 不得写入 `.env.example`、脚本、截图或 Git 提交；`.env.example` 中的空变量仅用于说明项目支持哪些配置。
 
+### arXiv 不需要 Key，但必须限速
+
+arXiv 官方接口允许匿名检索，没有凭据要配置，但要求相邻请求间隔不少于 3 秒。脚本已经把间隔写死在检索逻辑里，并且固定重试次数，不会无限重试。若当天 arXiv 返回限速或空结果，其他来源仍会继续工作，运行日志会在 `errors` 中记录该来源的失败原因。
+
 ## 二、方法 A：下载 ZIP 安装，最适合新手
 
 1. 打开项目主页：<https://github.com/TCcjx/research-paper-daily-push>。

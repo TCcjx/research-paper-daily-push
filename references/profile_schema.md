@@ -18,7 +18,7 @@
 - `modes`：命名的聚焦模式。每个键对应一个包含 `queries` 数组的对象。
 - `cross_topic_bonuses`：包含 `labels`、`bonus` 和可选 `reason` 的条目。只有列出的全部主题组都命中时才应用加分。
 - `method_groups`：包含 `label` 和 `terms` 的条目，用于扩展内置通用方法识别器。
-- `quality_tiers`：由 `tier_1`、`tier_2` 和 `tier_3` 组成的规范化期刊名称数组。
+- `quality_tiers`：由 `tier_1`、`tier_2` 和 `tier_3` 组成的规范化期刊名称数组。它只覆盖人工指定的期刊，与 `config/venue_ranking.json` 的 CCF 目录等级相互独立；同一篇论文两者都有分时取较高者。等级目录和权威性筛选策略见 [发表场所等级目录](venue_catalog.md)。
 - `exclusion_terms`：题名或摘要命中后触发初步排除的词语。该列表应保持保守。
 - `mechanistic_terms`：提示机制性证据或高信息量证据的领域专用术语。
 - `strong_recommendation_rules`：包含 `labels`、可选 `methods`、`min_score` 和 `reason` 的条目。所有已配置条件都必须同时命中。

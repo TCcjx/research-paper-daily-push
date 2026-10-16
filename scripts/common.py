@@ -224,6 +224,45 @@ def json_request(
     raise RuntimeError("HTTP 请求失败，但没有捕获到具体异常")
 
 
+def text_request(
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    timeout: int = 30,
+    retries: int = 3,
+) -> str:
+    """获取 XML 等纯文本响应，重试策略与 `json_request` 一致。"""
+    request_headers = {
+        "Accept": "application/xml, text/xml, */*",
+        "User-Agent": USER_AGENT,
+    }
+    if headers:
+        request_headers.update(headers)
+
+    last_error: Exception | None = None
+    for attempt in range(retries):
+        try:
+            request = Request(url, headers=request_headers, method="GET")
+            with urlopen(request, timeout=timeout) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                return response.read().decode(charset, errors="replace")
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code not in {429, 500, 502, 503, 504} or attempt + 1 >= retries:
+                raise
+            retry_after = exc.headers.get("Retry-After")
+            delay = min(float(retry_after), 10.0) if retry_after and retry_after.isdigit() else 2**attempt
+            time.sleep(delay)
+        except (URLError, TimeoutError, UnicodeDecodeError) as exc:
+            last_error = exc
+            if attempt + 1 >= retries:
+                raise
+            time.sleep(2**attempt)
+    if last_error:
+        raise last_error
+    raise RuntimeError("文本请求失败，但没有捕获到具体异常")
+
+
 def form_request(
     url: str,
     fields: dict[str, str],
@@ -280,24 +319,48 @@ def unique_strings(values: Iterable[Any]) -> list[str]:
     return result
 
 
+PREPRINT_JOURNAL_MARKERS = ("arxiv", "biorxiv", "medrxiv", "osf preprint", "preprint")
+
+
+def looks_like_preprint(paper: dict[str, Any]) -> bool:
+    """来源标记或期刊名指向预印本平台时即视为预印本。"""
+    if bool(paper.get("is_preprint")):
+        return True
+    journal = clean_text(paper.get("journal")).casefold()
+    return any(marker in journal for marker in PREPRINT_JOURNAL_MARKERS)
+
+
 def merge_papers(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
     merged = dict(left)
+    left_preprint = looks_like_preprint(left)
+    right_preprint = looks_like_preprint(right)
+    formal = next((item for item in (left, right) if not looks_like_preprint(item)), None)
     for field in ("doi", "title", "journal", "publication_date", "url", "article_type"):
+        preferred = [formal.get(field)] if formal else []
+        merged[field] = first_nonempty(*preferred, left.get(field), right.get(field))
+    for field in ("journal_reference", "reported_venue", "comment", "primary_category"):
         merged[field] = first_nonempty(left.get(field), right.get(field))
     left_abstract = clean_text(left.get("abstract"))
     right_abstract = clean_text(right.get("abstract"))
     merged["abstract"] = right_abstract if len(right_abstract) > len(left_abstract) else left_abstract
     merged["authors"] = unique_strings((left.get("authors") or []) + (right.get("authors") or []))
     merged["sources"] = unique_strings((left.get("sources") or []) + (right.get("sources") or []))
+    merged["arxiv_categories"] = unique_strings(
+        (left.get("arxiv_categories") or []) + (right.get("arxiv_categories") or [])
+    )
     source_ids = dict(left.get("source_ids") or {})
     source_ids.update(right.get("source_ids") or {})
     merged["source_ids"] = source_ids
     merged["citation_count"] = max(int(left.get("citation_count") or 0), int(right.get("citation_count") or 0))
     merged["is_open_access"] = bool(left.get("is_open_access") or right.get("is_open_access"))
-    merged["is_preprint"] = bool(left.get("is_preprint") or right.get("is_preprint"))
-    merged["needs_verification"] = unique_strings(
+    # 同一篇论文常常同时存在预印本记录和正式出版记录；只有在没有正式出版证据时才算预印本。
+    merged["is_preprint"] = left_preprint and right_preprint
+    notes = unique_strings(
         (left.get("needs_verification") or []) + (right.get("needs_verification") or [])
     )
+    if not merged["is_preprint"]:
+        notes = [note for note in notes if "预印本" not in note]
+    merged["needs_verification"] = notes
     return merged
 
 

@@ -13,24 +13,33 @@ description: 根据用户配置的研究方向，检索、复核、评分、去�
 
 自然语言主题文件负责科学解释，JSON配置负责 API 查询、主题词组、聚焦模式、初筛权重、期刊分层、排除条件、强烈推荐条件、研究路线分类和标签词表。两者必须保持一致。
 
+发表场所等级另由 `config/venue_ranking.json` 提供（CCF 目录条目、等级分值、权威性筛选策略）。修改等级目录或筛选策略前阅读 [`references/venue_catalog.md`](references/venue_catalog.md)。
+
 ## 工作流程
 
-1. 运行 `python scripts/run_daily.py collect --mode <mode>`。`all` 使用默认查询，聚焦模式名称来自研究配置。命令会查询 Europe PMC、Crossref、Semantic Scholar、OpenAlex 和 bioRxiv，合并重复记录，排除确认推送过的论文，并写入 `data/runs/YYYY-MM-DD/review_queue.json`。OpenAlex 可匿名检索，并使用游标读取每条查询最多600条近期记录；可选的 `OPENALEX_API_KEY` 和 `OPENALEX_MAILTO` 只能从环境变量读取，不能写入仓库或日志。
-2. 先建立近24小时优先的候选池。如果达到70分的初筛候选少于5篇，自动扩展到最近7天。学术接口经常只提供日级日期，因此要把“24小时”视为优先近似窗口，并在报告中说明实际范围。
-3. 阅读限定长度的 `research_memory_context`、候选题名、摘要、元数据、评分证据和待核实提示。研究记忆只用于发现连续证据、未解决问题、研究空白和重复思路，不能当成用户明确偏好的证明。
-4. 对可能入选的论文进行证据核验。如果摘要缺失、截断、相互矛盾或不足以支持实质性结论，应核对 DOI、出版商页面或可信论文库页面。不能只根据题名推断结果。
-5. 证据复核后重新评价每篇候选。推荐指数为 `relevance*0.40 + novelty*0.20 + quality*0.15 + methodology*0.15 + inspiration*0.10`，每个分项均为0–100分。只有检查过可用证据后，才能把 `score_status` 设为 `evidence_reviewed`。程序初筛分只用于排序，不代表最终结论。
-6. 排除弱相关论文、重复论文、撤稿/勘误/社论、明显可疑来源、命中配置排除条件的研究，以及关键主张无法核实的论文。预印本要明确标注为未经过正式同行评议。陌生期刊应标记“需要核实”，不能直接判定为低质量。
-7. 只保留证据充分且评分不低于70分的论文，按推荐指数降序排列，不为凑数降低标准。按照下方数据约定编写 `reviewed_articles.json`，把根字段 `term_explanation_mode` 设为 `dual`，然后运行 `python scripts/summarize_papers.py --input <reviewed.json> --output <report.md>`。
-8. 只有用户或定时任务提示词明确授权外部推送时，才能运行 `python scripts/run_daily.py deliver --reviewed <reviewed.json> --report <report.md> --provider auto`。报告已经在本地真实展示时，可使用 `--skip-push --record-local-report`。只有确认推送或展示成功后，交付阶段才更新去重历史和研究记忆。
+1. 运行 `python scripts/run_daily.py collect --mode <mode>`。`all` 使用默认查询，聚焦模式名称来自研究配置。命令会查询 Europe PMC、Crossref、Semantic Scholar、OpenAlex、bioRxiv 和 arXiv，合并重复记录，排除确认推送过的论文，按 `config/venue_ranking.json` 标注发表场所等级，并写入 `data/runs/YYYY-MM-DD/review_queue.json`。OpenAlex 可匿名检索，并使用游标读取每条查询最多600条近期记录；可选的 `OPENALEX_API_KEY` 和 `OPENALEX_MAILTO` 只能从环境变量读取，不能写入仓库或日志。
+2. arXiv 只按提交时间倒序翻页（每条查询最多400条），日期窗口在本地切分：把 `submittedDate` 与布尔分组写进同一条查询会让 arXiv 稳定返回 0 条。相邻请求间隔不少于 3 秒，不重试到无限。arXiv 与正式出版记录合并时，以正式出版的期刊、DOI 和链接为准，只有没有正式出版证据时才保留预印本身份。
+3. 先建立近24小时优先的候选池。如果达到70分的初筛候选少于5篇，自动扩展到最近7天。学术接口经常只提供日级日期，因此要把“24小时”视为优先近似窗口，并在报告中说明实际范围。
+4. 阅读限定长度的 `research_memory_context`、候选题名、摘要、元数据、评分证据、`venue_ranking` 等级标注和待核实提示。研究记忆只用于发现连续证据、未解决问题、研究空白和重复思路，不能当成用户明确偏好的证明。
+5. 对可能入选的论文进行证据核验。如果摘要缺失、截断、相互矛盾或不足以支持实质性结论，应核对 DOI、出版商页面或可信论文库页面。不能只根据题名推断结果。
+6. 证据复核后重新评价每篇候选。推荐指数为 `relevance*0.40 + novelty*0.20 + quality*0.15 + methodology*0.15 + inspiration*0.10`，每个分项均为0–100分。只有检查过可用证据后，才能把 `score_status` 设为 `evidence_reviewed`。程序初筛分只用于排序，不代表最终结论。
+7. 排除弱相关论文、重复论文、撤稿/勘误/社论、明显可疑来源、命中配置排除条件的研究，以及关键主张无法核实的论文。预印本要明确标注为未经过正式同行评议。陌生期刊应标记“需要核实”，不能直接判定为低质量。
+8. 只保留证据充分且评分不低于70分的论文，按推荐指数降序排列，不为凑数降低标准。按照下方数据约定编写 `reviewed_articles.json`，把根字段 `term_explanation_mode` 设为 `dual`，然后运行 `python scripts/summarize_papers.py --input <reviewed.json> --output <report.md>`。
+9. 只有用户或定时任务提示词明确授权外部推送时，才能运行 `python scripts/run_daily.py deliver --reviewed <reviewed.json> --report <report.md> --provider auto`。报告已经在本地真实展示时，可使用 `--skip-push --record-local-report`。只有确认推送或展示成功后，交付阶段才更新去重历史和研究记忆。
+
+## 发表场所等级与权威性
+
+`venue_ranking` 只按官方目录条目匹配期刊或会议名称、公认简称与配置别名，并在 `venue_ranking.json` 的 `policy.mode` 中控制筛选力度：`label_only` 只标注不排除，`authority_first` 让预印本和未核实场所必须达到相关性阈值才进入复核队列，`strict_ccf_or_tier` 只保留命中目录或配置分层的论文。
+
+红线是不得臆造等级：未命中目录时只能标注“正规出版物，未收录于内置目录（需要核实）”；预印本没有 CCF 等级；作者自述的录用去向、按简称匹配的结果、以及同时命中期刊与会议条目的名称都算未核实，核实之前不能作为等级依据，也不能触发 `strong_recommendation`。同名简称存在歧义时按较低等级标注。Findings、Workshop 等附属卷不等于主会等级。目录只覆盖部分领域，覆盖范围与补齐方式见 [`references/venue_catalog.md`](references/venue_catalog.md)。
 
 ## 证据与写作规则
 
 明确区分直接实验依据、相关性、假设和推测。使用审慎的正式科学中文。不得捏造题名、研究对象、方法、样本、数值、DOI、机制或数据集；证据不支持的细节写明“需要核实”。
 
-每篇论文提供：忠实中文题名和英文原题、期刊/日期/DOI/链接/文章类型、总分和分项评分、100个汉字以内的推荐理由、3–5条受证据约束的核心发现，以及针对实验设计、方法、关键对象或机制、目标研究体系、未来课题或基金、高水平论文潜力和局限/验证需求的具体启发。存在研究路线阶段时，说明论文对应的阶段。拉丁学名和适用的基因名称使用斜体。添加1–8个聚焦标签。
+每篇论文提供：忠实中文题名和英文原题、期刊/发表场所等级/日期/DOI/链接/文章类型、总分和分项评分、100个汉字以内的推荐理由、3–5条受证据约束的核心发现，以及针对实验设计、方法、关键对象或机制、目标研究体系、未来课题或基金、高水平论文潜力和局限/验证需求的具体启发。存在研究路线阶段时，说明论文对应的阶段。拉丁学名和适用的基因名称使用斜体。添加1–8个聚焦标签。
 
-只有证据充分，并且人工复核后满足配置的强烈推荐规则，才能设置 `strong_recommendation: true`。单纯关键词命中不能触发强烈推荐。
+只有证据充分，并且人工复核后满足配置的强烈推荐规则，才能设置 `strong_recommendation: true`。单纯关键词命中不能触发强烈推荐。发表场所等级未经核实时也不能设为强烈推荐，需要先按 `venue_ranking.needs_verification` 完成核对。
 
 报告层面应包含检索/筛选/最终推荐数量、最值得阅读前三名及理由，并结合当天证据提出1–3个可检验的研究思路。
 
@@ -56,6 +65,18 @@ description: 根据用户配置的研究方向，检索、复核、评分、去�
   "doi": "10.xxxx/xxxx",
   "url": "https://...",
   "article_type": "研究论文",
+  "venue_ranking": {
+    "status": "ccf_listed",
+    "ccf": "A",
+    "kind": "journal",
+    "venue": "IEEE Transactions on Knowledge and Data Engineering",
+    "label": "CCF-A 期刊",
+    "match_method": "name",
+    "verified_venue": true,
+    "ambiguous": false,
+    "catalog_version": "第七版（2026）",
+    "needs_verification": []
+  },
   "recommendation_score": 86,
   "score_status": "evidence_reviewed",
   "component_scores": {

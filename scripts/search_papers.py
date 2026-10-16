@@ -8,6 +8,7 @@ import os
 import re
 import sys
 import time
+import xml.etree.ElementTree as ElementTree
 from collections.abc import Callable
 from datetime import date, datetime, timedelta
 from typing import Any
@@ -24,12 +25,13 @@ from common import (
     json_request,
     normalize_doi,
     parse_date,
+    text_request,
     unique_strings,
     utc_now_iso,
 )
 from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, profile_queries, profile_terms
 
-API_SOURCES = ("europepmc", "crossref", "semanticscholar", "openalex", "biorxiv")
+API_SOURCES = ("europepmc", "crossref", "semanticscholar", "openalex", "biorxiv", "arxiv")
 
 OPENALEX_SELECT_FIELDS = (
     "id",
@@ -46,6 +48,11 @@ OPENALEX_SELECT_FIELDS = (
     "is_retracted",
 )
 OPENALEX_MAX_RESULTS_PER_QUERY = 600
+
+ARXIV_MAX_RESULTS_PER_QUERY = 400
+ARXIV_PAGE_SIZE = 200
+# arXiv 官方建议每次请求至少间隔 3 秒，超限会被限流。
+ARXIV_MIN_INTERVAL = 3.0
 
 
 def compact_query(query: str) -> str:
@@ -400,12 +407,134 @@ def search_biorxiv(_queries: list[str], start: date, end: date) -> list[dict[str
     return output
 
 
+ATOM_NS = "{http://www.w3.org/2005/Atom}"
+ARXIV_NS = "{http://arxiv.org/schemas/atom}"
+OPENSEARCH_NS = "{http://a9.com/-/spec/opensearch/1.1/}"
+_ARXIV_TOKEN = re.compile(r'"[^"]*"|[()]|\S+')
+
+
+def arxiv_query(query: str) -> str:
+    """把配置中的布尔检索式改写为 arXiv API 需要的 `all:` 字段前缀形式。"""
+    parts: list[str] = []
+    for token in _ARXIV_TOKEN.findall(query):
+        if token in {"(", ")"}:
+            parts.append(token)
+            continue
+        upper = token.upper()
+        if upper in {"AND", "OR", "ANDNOT", "NOT"}:
+            parts.append("ANDNOT" if upper in {"NOT", "ANDNOT"} else upper)
+            continue
+        parts.append(token if ":" in token else f"all:{token}")
+    text = " ".join(parts).replace("( ", "(").replace(" )", ")")
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def _arxiv_identifiers(value: str) -> str:
+    tail = re.split(r"arxiv\.org/(?:abs|pdf)/", value.strip(), maxsplit=1, flags=re.IGNORECASE)[-1]
+    tail = re.sub(r"\.pdf$", "", tail.strip())
+    return re.sub(r"v\d+$", "", tail, flags=re.IGNORECASE)
+
+
+def _arxiv_text(entry: Any, namespace: str, name: str) -> str:
+    return clean_text(entry.findtext(f"{namespace}{name}", default=""))
+
+
+def _arxiv_entry(entry: Any) -> dict[str, Any]:
+    raw_url = _arxiv_text(entry, ATOM_NS, "id")
+    doi = normalize_doi(_arxiv_text(entry, ARXIV_NS, "doi"))
+    journal_ref = _arxiv_text(entry, ARXIV_NS, "journal_ref")
+    comment = _arxiv_text(entry, ARXIV_NS, "comment")
+    primary = entry.find(f"{ARXIV_NS}primary_category")
+    notes = ["arXiv 预印本，尚未完成正式同行评议"]
+    if doi or journal_ref:
+        notes.append("元数据带有 DOI 或期刊登记信息，需核实是否已在正式场所出版")
+    return {
+        "doi": doi,
+        "title": _arxiv_text(entry, ATOM_NS, "title"),
+        "authors": unique_strings(
+            author.findtext(f"{ATOM_NS}name", default="") for author in entry.findall(f"{ATOM_NS}author")
+        ),
+        "journal": "arXiv",
+        "publication_date": parse_date(_arxiv_text(entry, ATOM_NS, "published")),
+        "url": raw_url.replace("http://", "https://", 1),
+        "article_type": "preprint",
+        "abstract": _arxiv_text(entry, ATOM_NS, "summary"),
+        "sources": ["arXiv"],
+        "source_ids": {"arxiv": _arxiv_identifiers(raw_url)} if raw_url else {},
+        "citation_count": 0,
+        "is_open_access": True,
+        "is_preprint": True,
+        "journal_reference": journal_ref,
+        "comment": comment,
+        "primary_category": (primary.get("term") or "") if primary is not None else "",
+        "arxiv_categories": unique_strings(node.get("term") for node in entry.findall(f"{ATOM_NS}category")),
+        "needs_verification": notes,
+    }
+
+
+def search_arxiv(queries: list[str], start: date, end: date) -> list[dict[str, Any]]:
+    """按提交时间倒序检索 arXiv，并在本地切出日期窗口。
+
+    arXiv 的查询解析器不接受“布尔分组 + submittedDate 区间”的组合：这样写会稳定返回
+    0 条结果，所以只能在本地按日期过滤，并在翻页越过窗口时停止。官方要求相邻请求
+    间隔不少于 3 秒；重试次数固定，不做无限重试。
+    """
+    output: list[dict[str, Any]] = []
+    last_request_at = 0.0
+    window_start = start.isoformat()
+    window_end = end.isoformat()
+    for query in queries:
+        search_query = arxiv_query(query)
+        offset = 0
+        while offset < ARXIV_MAX_RESULTS_PER_QUERY:
+            remaining = ARXIV_MIN_INTERVAL - (time.monotonic() - last_request_at)
+            if remaining > 0:
+                time.sleep(remaining)
+            params = urlencode(
+                {
+                    "search_query": search_query,
+                    "start": offset,
+                    "max_results": ARXIV_PAGE_SIZE,
+                    "sortBy": "submittedDate",
+                    "sortOrder": "descending",
+                }
+            )
+            url = f"https://export.arxiv.org/api/query?{params}"
+            last_request_at = time.monotonic()
+            root = ElementTree.fromstring(text_request(url, timeout=60, retries=2))
+            error = root.find(f"{OPENSEARCH_NS}error")
+            if error is not None:
+                details = clean_text(error.findtext(f"{ARXIV_NS}details", default=""))
+                raise RuntimeError(f"arXiv 拒绝了该查询语句：{details or search_query}")
+            entries = root.findall(f"{ATOM_NS}entry")
+            if not entries:
+                break
+            passed_window = False
+            for element in entries:
+                record = _arxiv_entry(element)
+                published = record["publication_date"]
+                if published and published < window_start:
+                    passed_window = True
+                    break
+                if not published or published > window_end:
+                    continue
+                output.append(record)
+            if passed_window:
+                break
+            offset += len(entries)
+            total_results = int(root.findtext(f"{OPENSEARCH_NS}totalResults", default="0") or 0)
+            if total_results and offset >= total_results:
+                break
+    return output
+
+
 SOURCE_FUNCTIONS: dict[str, Callable[[list[str], date, date], list[dict[str, Any]]]] = {
     "europepmc": search_europepmc,
     "crossref": search_crossref,
     "semanticscholar": search_semantic_scholar,
     "openalex": search_openalex,
     "biorxiv": search_biorxiv,
+    "arxiv": search_arxiv,
 }
 
 
