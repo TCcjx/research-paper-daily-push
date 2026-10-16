@@ -136,7 +136,7 @@ python scripts\run_daily.py --help
 
 ## 五、配置自己的研究方向
 
-公开版本没有预设研究主题。这样可以保护开发者隐私，也能避免其他用户收到不相关论文。
+公开版本的 `config/research_profile.json` 没有预设研究主题。这样可以保护开发者隐私，也能避免其他用户收到不相关论文。仓库里的 `examples/` 目录附带一份已填写完整的示例（`research_profile.temporal-kg.json` 与 `research_topics.temporal-kg.md`），可以直接复制成你自己的配置文件再改词表；示例只是写法参考，程序不会自动读取它，安装副本里也没有这个目录。
 
 最简单的方法是在 Codex 中发送：
 

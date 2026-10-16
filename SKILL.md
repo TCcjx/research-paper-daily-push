@@ -11,6 +11,8 @@ description: 根据用户配置的研究方向，检索、复核、评分、去�
 
 证据复核前先阅读 [`references/research_topics.md`](references/research_topics.md)，并使用 `config/research_profile.json` 进行确定性检索和初步评分。公开配置有意留空；如果 `configured` 为 `false`，停止检索并帮助用户配置研究方向，不能臆造主题，也不能悄悄套用内置示例。创建或修改配置时阅读 [`references/profile_schema.md`](references/profile_schema.md)。
 
+`examples/` 下的已填写配置只是供用户自行复制的样例，不是可用的运行时主题：即使 `config/research_profile.json` 未配置，也不能改用 `examples/research_profile.temporal-kg.json` 去检索，必须先由用户确认自己的方向并写入正式配置文件。
+
 自然语言主题文件负责科学解释，JSON配置负责 API 查询、主题词组、聚焦模式、初筛权重、期刊分层、排除条件、强烈推荐条件、研究路线分类和标签词表。两者必须保持一致。
 
 发表场所等级另由 `config/venue_ranking.json` 提供（CCF 目录条目、等级分值、权威性筛选策略）。修改等级目录或筛选策略前阅读 [`references/venue_catalog.md`](references/venue_catalog.md)。

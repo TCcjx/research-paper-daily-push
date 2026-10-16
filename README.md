@@ -55,7 +55,9 @@ python -m pip install -r requirements.txt
 3. 检查两个文件表达的研究方向是否一致。
 4. 配置完成后，将 `config/research_profile.json` 中的 `configured` 改为 `true`。
 
-公开模板默认留空。请不要在准备公开的分支中提交个人研究主题、未公开研究计划或真实推送凭据。
+公开模板默认留空，`configured` 为 `false` 时程序会停止检索。不想从零开始填写时，[`examples/`](examples/) 提供一份完整可用的示例：`research_profile.temporal-kg.json` 与配套的 `research_topics.temporal-kg.md`，对应「时态知识图谱推理为核心主线、大模型智能体为交叉场景」的方向，包含检索式、主题词组与权重、跨主题加分、期刊分层、排除词、强烈推荐条件、研究路线阶段和标签词表，可复制到自己的 `config/research_profile.json` 与 `references/research_topics.md` 后再按方向改词表。示例展示的是配置写法，不构成对研究方向的建议。
+
+请不要提交真实推送凭据（API Key、Token、Webhook 地址等只放环境变量）；示例中的研究主题与检索词是有意公开的样例，其余个人主题仍应留在本地。
 
 ## 发表场所等级与权威性筛选
 

@@ -1,0 +1,372 @@
+{
+  "configured": true,
+  "profile_name": "Agent 与时态知识图谱推理",
+  "report_language": "zh-CN",
+  "research_context": "以时态知识图谱推理为核心研究对象：事件四元组（主体, 关系, 客体, 时间）上的时间感知表示、外推与插值、时态规则挖掘与神经符号约束，以及时间切分评测的可信性。大模型智能体（规划、记忆、检索增强）作为时态图谱的主要应用与交叉场景，关注结构化时序知识能否提升智能体推理的长程一致性、可追溯性与事实一致性。证据复核时优先确认：时间建模是否真实存在、时间切分评测是否可信、结论是否有可复现产物支撑。",
+  "target_system": "时态知识图谱推理系统（事件四元组、时间感知嵌入、时态规则与神经符号推理、事件预测）为主，大模型智能体的结构化记忆与规划为应用场景；来源覆盖 arXiv、OpenAlex、Semantic Scholar 收录的 AI 会议与期刊",
+  "priority_questions": [
+    "时态知识图谱如何表示不规则时间、时间区间、持续时间与不确定时间戳，并在外推与插值设置下推理？",
+    "事件预测与链接预测类工作的评测是否可信：是否存在未来信息泄漏、随机切分高估、基线过弱？",
+    "大模型作为知识图谱构建、补全或查询组件时，如何保证事实一致与时态一致并把幻觉控制在可接受范围？",
+    "智能体的记忆与规划模块能否用时态知识图谱结构化，从而提升长程一致性、可追溯性与可解释性？",
+    "是否出现把时序或结构化推理能力做成可复现基准（代码、数据、固定时间切分）的工作？"
+  ],
+  "queries": [
+    "(\"temporal knowledge graph\") AND (reasoning OR embedding OR extrapolation OR \"event prediction\")",
+    "(\"temporal knowledge graph\") AND (\"large language model\" OR LLM OR \"language model\")",
+    "(\"knowledge graph reasoning\" OR \"knowledge graph completion\") AND (benchmark OR evaluation OR reproducibility)",
+    "(\"knowledge graph\") AND (\"llm agent\" OR agentic OR \"language model agent\" OR \"multi-agent\")",
+    "(\"agent memory\" OR \"graph memory\" OR GraphRAG) AND (reasoning OR planning OR retrieval)"
+  ],
+  "modes": {
+    "all": {
+      "label": "默认全量",
+      "queries": []
+    },
+    "temporal_kg": {
+      "label": "时态知识图谱主线",
+      "queries": [
+        "(\"temporal knowledge graph\") AND (reasoning OR embedding OR extrapolation OR \"event prediction\")",
+        "(\"temporal knowledge graph\") AND (\"large language model\" OR LLM OR \"language model\")",
+        "(\"temporal knowledge graph\") OR ((\"temporal graph\") AND (reasoning OR learning OR embedding))"
+      ]
+    },
+    "agent_memory": {
+      "label": "智能体记忆与结构化检索",
+      "queries": [
+        "(\"knowledge graph\") AND (\"llm agent\" OR agentic OR \"language model agent\" OR \"multi-agent\")",
+        "(\"agent memory\" OR \"graph memory\" OR GraphRAG) AND (reasoning OR planning OR retrieval)"
+      ]
+    },
+    "benchmark_eval": {
+      "label": "评测与可信性",
+      "queries": [
+        "(\"knowledge graph reasoning\" OR \"knowledge graph completion\") AND (benchmark OR evaluation OR reproducibility)",
+        "(\"large language model\") AND (hallucination OR factuality) AND (\"knowledge graph\" OR temporal)"
+      ]
+    }
+  },
+  "topic_groups": [
+    {
+      "label": "时态知识图谱",
+      "weight": 100,
+      "terms": [
+        "temporal knowledge graph",
+        "temporal knowledge",
+        "temporal kg",
+        "tkg",
+        "event prediction",
+        "temporal reasoning",
+        "temporal graph",
+        "temporal extrapolation",
+        "temporal interpolation",
+        "time-aware",
+        "valid time",
+        "时序知识图谱",
+        "时态知识图谱",
+        "事件预测"
+      ]
+    },
+    {
+      "label": "智能体与规划",
+      "weight": 65,
+      "terms": [
+        "llm agent",
+        "language model agent",
+        "large language model agent",
+        "agentic",
+        "autonomous agent",
+        "multi-agent",
+        "ai agent",
+        "agent memory",
+        "tool use",
+        "tool learning",
+        "function calling",
+        "planning",
+        "task decomposition",
+        "智能体",
+        "多智能体"
+      ]
+    },
+    {
+      "label": "结构化知识与图推理",
+      "weight": 88,
+      "terms": [
+        "knowledge graph",
+        "knowledge graph completion",
+        "knowledge graph embedding",
+        "knowledge-based",
+        "graph reasoning",
+        "graph neural network",
+        "link prediction",
+        "relation prediction",
+        "entity linking",
+        "triple",
+        "quadruple",
+        "subgraph",
+        "kgqa",
+        "graphrag",
+        "graph retrieval",
+        "知识图谱",
+        "图推理"
+      ]
+    },
+    {
+      "label": "大模型记忆与检索增强",
+      "weight": 60,
+      "terms": [
+        "retrieval-augmented",
+        "retrieval augmented",
+        "long-term memory",
+        "memory module",
+        "semantic memory",
+        "episodic memory",
+        "context window",
+        "hallucination",
+        "factuality",
+        "knowledge editing",
+        "chain-of-thought",
+        "检索增强"
+      ]
+    },
+    {
+      "label": "评测与可复现基准",
+      "weight": 70,
+      "terms": [
+        "benchmark",
+        "evaluation protocol",
+        "dataset",
+        "ablation",
+        "reproducibility",
+        "open-source",
+        "state-of-the-art",
+        "leaderboard",
+        "we release",
+        "基准"
+      ]
+    }
+  ],
+  "cross_topic_bonuses": [
+    {
+      "labels": [
+        "时态知识图谱",
+        "智能体与规划"
+      ],
+      "bonus": 12,
+      "reason": "时态图谱作为智能体记忆与规划后端，属交叉亮点而非主线"
+    },
+    {
+      "labels": [
+        "结构化知识与图推理",
+        "大模型记忆与检索增强"
+      ],
+      "bonus": 8,
+      "reason": "用结构化知识支撑智能体记忆或检索后端"
+    },
+    {
+      "labels": [
+        "时态知识图谱",
+        "评测与可复现基准"
+      ],
+      "bonus": 15,
+      "reason": "带时间切分协议的时态推理评测是本方向核心关切"
+    }
+  ],
+  "method_groups": [
+    {
+      "label": "temporal_split_evaluation",
+      "terms": [
+        "temporal split",
+        "time-aware split",
+        "extrapolation setting",
+        "timestamp split",
+        "chronological split",
+        "interpolation and extrapolation"
+      ]
+    },
+    {
+      "label": "graph_or_symbolic_reasoning",
+      "terms": [
+        "graph neural network",
+        "rule mining",
+        "logical rule",
+        "neuro-symbolic",
+        "subgraph retrieval",
+        "tensor decomposition",
+        "rotational embedding",
+        "knowledge graph embedding"
+      ]
+    },
+    {
+      "label": "agent_or_llm_experiment",
+      "terms": [
+        "llm agent",
+        "tool use",
+        "multi-agent",
+        "function calling",
+        "prompting",
+        "fine-tuning",
+        "reinforcement learning from human feedback"
+      ]
+    },
+    {
+      "label": "benchmark_or_dataset_construction",
+      "terms": [
+        "we introduce a benchmark",
+        "new dataset",
+        "benchmark construction",
+        "evaluation protocol",
+        "leaderboard"
+      ]
+    },
+    {
+      "label": "reproducibility_artifacts",
+      "terms": [
+        "code is available",
+        "open-source",
+        "we release",
+        "publicly available",
+        "reproduce"
+      ]
+    },
+    {
+      "label": "error_or_ablation_analysis",
+      "terms": [
+        "ablation study",
+        "error analysis",
+        "significance test",
+        "qualitative analysis"
+      ]
+    }
+  ],
+  "quality_tiers": {
+    "tier_1": [
+      "Nature",
+      "Nature Machine Intelligence",
+      "Artificial Intelligence",
+      "Journal of Machine Learning Research",
+      "IEEE Transactions on Pattern Analysis and Machine Intelligence",
+      "IEEE Transactions on Knowledge and Data Engineering",
+      "ACM Computing Surveys"
+    ],
+    "tier_2": [
+      "Information Fusion",
+      "Knowledge-Based Systems",
+      "Information Sciences",
+      "Expert Systems with Applications",
+      "Neurocomputing",
+      "Machine Learning",
+      "IEEE Transactions on Neural Networks and Learning Systems",
+      "ACM Transactions on Information Systems",
+      "Data Mining and Knowledge Discovery",
+      "Transactions of the Association for Computational Linguistics",
+      "Computational Linguistics"
+    ],
+    "tier_3": [
+      "Lecture Notes in Computer Science",
+      "Lecture Notes in Artificial Intelligence",
+      "Proceedings of Machine Learning Research",
+      "International Journal of Approximate Reasoning",
+      "World Wide Web Journal",
+      "Connection Science",
+      "Neural Processing Letters"
+    ]
+  },
+  "exclusion_terms": [
+    "randomized controlled trial",
+    "single-cell",
+    "single cell",
+    "spatial transcriptomics",
+    "tumor microenvironment",
+    "genome-wide association",
+    "gene knockout",
+    "mouse model",
+    "clinical cohort",
+    "crop breeding",
+    "plant genotype",
+    "metabolite profiling",
+    "nursing",
+    "radiotherapy"
+  ],
+  "mechanistic_terms": [
+    "time-aware representation",
+    "temporal extrapolation",
+    "valid time",
+    "rule confidence",
+    "temporal consistency",
+    "fact verification",
+    "ablation",
+    "significance test"
+  ],
+  "strong_recommendation_rules": [
+    {
+      "labels": [
+        "时态知识图谱",
+        "结构化知识与图推理"
+      ],
+      "min_score": 80,
+      "reason": "命中时态知识图谱推理主线（时间感知表示、外推/插值、时态规则或事件预测）且证据复核确认有实质推进"
+    },
+    {
+      "labels": [
+        "结构化知识与图推理",
+        "评测与可复现基准"
+      ],
+      "methods": [
+        "temporal_split_evaluation"
+      ],
+      "min_score": 80,
+      "reason": "提供时间切分协议与开源产物的可信时态推理评测工作"
+    },
+    {
+      "labels": [
+        "时态知识图谱",
+        "智能体与规划"
+      ],
+      "min_score": 82,
+      "reason": "时态图谱与智能体结合的交叉亮点；作为次主线门槛更高"
+    }
+  ],
+  "roadmap_stages": [
+    {
+      "label": "阶段一：时序知识表示与外推",
+      "keywords": [
+        "temporal knowledge graph",
+        "extrapolation",
+        "event prediction",
+        "time-aware embedding",
+        "temporal reasoning"
+      ]
+    },
+    {
+      "label": "阶段二：推理可控与可信评测",
+      "keywords": [
+        "benchmark",
+        "hallucination",
+        "factuality",
+        "evaluation protocol",
+        "reproducibility",
+        "temporal consistency"
+      ]
+    },
+    {
+      "label": "阶段三：智能体的结构化记忆",
+      "keywords": [
+        "agent memory",
+        "graph memory",
+        "graphrag",
+        "long-term memory",
+        "episodic memory",
+        "planning"
+      ]
+    }
+  ],
+  "tags": [
+    "#时态知识图谱",
+    "#事件预测",
+    "#图推理",
+    "#评测基准",
+    "#Agent记忆",
+    "#大模型可控性"
+  ]
+}
