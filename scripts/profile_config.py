@@ -7,15 +7,16 @@ from pathlib import Path
 from typing import Any
 
 from common import clean_text, load_json, unique_strings
+from topic_scope import validate_scope
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_PROFILE = SKILL_DIR / "config" / "research_profile.json"
 
 SOURCE_PRESETS = {
-    "general": ["crossref", "openalex", "arxiv"],
-    "computer_science": ["arxiv", "crossref", "openalex"],
-    "biomedical": ["europepmc", "crossref", "biorxiv"],
+    "general": ["arxiv"],
+    "computer_science": ["arxiv"],
+    "biomedical": ["europepmc", "biorxiv"],
 }
 SOURCE_NAMES = {"crossref", "openalex", "arxiv", "europepmc", "biorxiv", "semanticscholar"}
 
@@ -32,6 +33,12 @@ def profile_sources(profile: dict[str, Any], override: str = "auto") -> list[str
         sources = SOURCE_PRESETS[preset]
     if not isinstance(sources, list) or not sources or any(value not in SOURCE_NAMES for value in sources):
         raise ProfileError("sources 必须是非空来源标识数组，且不能包含未知来源")
+    disabled = profile.get("disabled_sources", [])
+    if not isinstance(disabled, list) or any(value not in SOURCE_NAMES for value in disabled):
+        raise ProfileError("disabled_sources 必须是有效来源标识数组")
+    paused = sorted(set(sources) & set(disabled))
+    if paused:
+        raise ProfileError(f"来源已暂停：{', '.join(paused)}；恢复前请先修改 disabled_sources")
     return unique_strings(sources)
 
 
@@ -69,6 +76,12 @@ def load_profile(path: str | Path = DEFAULT_PROFILE, *, require_configured: bool
     profile.setdefault("strong_recommendation_rules", [])
     profile.setdefault("roadmap_stages", [])
     profile.setdefault("tags", [])
+    if profile.get("reading_order", "score") not in {"score", "venue_first"}:
+        raise ProfileError("reading_order 必须是 score 或 venue_first")
+    try:
+        validate_scope(profile.get("topic_scope"))
+    except ValueError as exc:
+        raise ProfileError(str(exc)) from exc
 
     if require_configured:
         profile_sources(profile)

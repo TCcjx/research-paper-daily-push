@@ -27,7 +27,7 @@ STOP_WORDS = {
 # 同名简称也会出现在附属卷里（如 Findings of EMNLP），这些卷不等同于 CCF 目录中的主会。
 COMPANION_MARKERS = (
     "findings", "workshop", "companion", "tutorial", "demo",
-    "short paper", "doctoral", "student research", "tracker",
+    "short paper", "technical brief", "summary", "extended abstract", "poster", "doctoral", "student research", "tracker",
 )
 
 # 简称同时命中期刊与会议条目时无法自动区分，按较低等级标注，避免虚高。
@@ -177,7 +177,7 @@ def _match_name(
                 if best is None or overlap > best[0]:
                     best = (overlap, entry, ambiguous)
         if best:
-            return best[1], "name", best[2]
+            return best[1], "token_overlap", best[2]
     for alias, entry_list in index["abbr"].items():
         if len(alias) < 3:
             continue
@@ -194,10 +194,10 @@ def _expected_kind(paper: dict[str, Any]) -> str | None:
     article_type = clean_text(paper.get("article_type")).casefold()
     if paper.get("is_preprint"):
         return None
-    if "journal" in article_type or "article" in article_type:
-        return "journal"
     if "conference" in article_type or "proceedings" in article_type:
         return "conference"
+    if "journal" in article_type or "article" in article_type:
+        return "journal"
     return None
 
 
@@ -227,7 +227,7 @@ def classify(paper: dict[str, Any], ranking: dict[str, Any]) -> dict[str, Any]:
     kind = _expected_kind(paper)
     statement = clean_text(first_statement(paper))
     result["author_statement"] = statement or None
-    combined = normalize_venue(f"{journal} {statement}")
+    combined = normalize_venue(f"{journal} {statement} {paper.get('paper_track', '')} {paper.get('article_type', '')}")
     companion = next((marker for marker in COMPANION_MARKERS if marker in combined), None)
 
     def apply_hit(hit: tuple[dict[str, Any], str, bool], matched_on: str) -> None:
@@ -246,6 +246,8 @@ def classify(paper: dict[str, Any], ranking: dict[str, Any]) -> dict[str, Any]:
         )
         if method == "abbreviation":
             result["needs_verification"].append("等级按简称匹配，需核对是否为同一出版场所")
+        if method == "token_overlap":
+            result["needs_verification"].append("场所名称仅部分匹配，需核对官方全名后评级")
         if ambiguous:
             result["needs_verification"].append(
                 "该名称或简称同时命中期刊与会议条目，已按较低等级标注，需核实实际出版场所"
@@ -265,16 +267,20 @@ def classify(paper: dict[str, Any], ranking: dict[str, Any]) -> dict[str, Any]:
         if hit:
             apply_hit(hit, "journal")
             result["status"] = "ccf_listed"
-            result["verified_venue"] = not result["ambiguous"]
+            result["verified_venue"] = not result["ambiguous"] and result["match_method"] == "name"
             result["label"] = (
                 _label(ranking, "ambiguous")
-                if result["ambiguous"]
+                if not result["verified_venue"]
                 else _label(
                     ranking,
                     "ccf_journal" if result["kind"] != "conference" else "ccf_conference",
                     ccf=result["ccf"] or "?",
                 )
             )
+            if not result["verified_venue"]:
+                if not result["ambiguous"]:
+                    result["label"] = "场所名称或简称待核实（暂不按 CCF 等级优先）"
+                result["candidate_ccf"], result["ccf"] = result["ccf"], None
             return result
 
     if statement and not companion:
@@ -298,6 +304,7 @@ def classify(paper: dict[str, Any], ranking: dict[str, Any]) -> dict[str, Any]:
                     )
                 )
             )
+            result["candidate_ccf"], result["ccf"] = result["ccf"], None
             return result
 
     if is_preprint:
@@ -330,6 +337,44 @@ def first_statement(paper: dict[str, Any]) -> str:
         if value:
             return value
     return ""
+
+
+def venue_priority(paper: dict[str, Any]) -> int:
+    """阅读排序用的场所层级。作者录用自述不能继承 CCF 优先级。"""
+    venue = paper.get("venue_ranking") or {}
+    if (venue.get("status") == "ccf_listed" and venue.get("verified_venue")
+            and not venue.get("ambiguous") and not paper.get("is_preprint")):
+        return {"A": 6, "B": 4, "C": 2}.get(venue.get("ccf"), 0)
+    if not paper.get("is_preprint"):
+        tier = paper.get("configured_journal_tier")
+        if tier in {"tier_1", "tier_2", "tier_3"}:
+            return {"tier_1": 5, "tier_2": 3, "tier_3": 1}[tier]
+        if venue.get("status") == "unlisted":
+            return 0
+    return -1
+
+
+def reading_sort_key(paper: dict[str, Any]) -> tuple:
+    """同主题内场所等级优先，再比较研究相关性、贡献与日期。"""
+    return (venue_priority(paper), (paper.get("component_scores") or {}).get("relevance", 0),
+            (paper.get("assessment") or {}).get("importance", 0),
+            paper.get("publication_date", ""), paper.get("recommendation_score", 0))
+
+
+def venue_importance(paper: dict[str, Any]) -> int:
+    return {6: 95, 5: 93, 4: 85, 3: 84, 2: 74, 1: 74, 0: 65}.get(venue_priority(paper), 58)
+
+
+def apply_venue_importance(paper: dict[str, Any]) -> None:
+    """保持贡献评分原值，重复生成报告不会反复加权。"""
+    assessment = paper.setdefault("assessment", {})
+    contribution = assessment.get("contribution_importance", assessment.get("importance"))
+    if type(contribution) is not int or not 0 <= contribution <= 100:
+        raise ValueError("场所优先模式需要 assessment.contribution_importance（0–100）；旧数据可沿用 importance")
+    assessment["contribution_importance"] = contribution
+    assessment["venue_importance"] = venue_importance(paper)
+    assessment["importance"] = round(assessment["venue_importance"] * .6 + contribution * .4)
+    assessment["importance_basis"] = "venue_60_contribution_40"
 
 
 def quality_score(

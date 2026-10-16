@@ -1,222 +1,247 @@
 {
   "configured": true,
-  "profile_name": "Agent 与时态知识图谱推理",
+  "profile_name": "Temporal Knowledge Reasoning｜重点 Agent × TKG",
   "report_language": "zh-CN",
-  "research_context": "以时态知识图谱推理为核心研究对象：事件四元组（主体, 关系, 客体, 时间）上的时间感知表示、外推与插值、时态规则挖掘与神经符号约束，以及时间切分评测的可信性。大模型智能体（规划、记忆、检索增强）作为时态图谱的主要应用与交叉场景，关注结构化时序知识能否提升智能体推理的长程一致性、可追溯性与事实一致性。证据复核时优先确认：时间建模是否真实存在、时间切分评测是否可信、结论是否有可复现产物支撑。",
-  "target_system": "时态知识图谱推理系统（事件四元组、时间感知嵌入、时态规则与神经符号推理、事件预测）为主，大模型智能体的结构化记忆与规划为应用场景；来源覆盖 arXiv、OpenAlex、Semantic Scholar 收录的 AI 会议与期刊",
+  "source_preset": "computer_science",
+  "sources": [
+    "arxiv"
+  ],
+  "watchlist": [],
+  "research_context": "统一研究主题为 temporal knowledge reasoning（时态知识推理），以时态知识图谱推理为主要对象，同主题内先按已核实发表会议与期刊的含金量安排阅读，CCF A 类优先，同等级内重点关注 Agent 与 TKG reasoning 的直接结合。每篇推荐均须明确包含时间建模、知识事实或知识图谱、推理任务三项；关注时间约束多跳推理、时态问答、外推/插值、链接或事件预测、规则推理及其可信评测。Agent、LLM、记忆、GraphRAG 仅作为实现方法，不能作为独立扩展主题。普通 Agent memory、静态 KG、一般图学习或时间序列论文不能因可迁移、潜在启发而进入精选，也不计入主题趋势。候选不足时扩展同一主题的日期窗口，仍不足则少推或零推荐。",
+  "target_system": "带时间戳/时间区间的知识事实与事件四元组上的推理系统；重点为以 TKG 为环境、工具、结构化记忆或推理对象的 Agent。任务包括时间约束多跳推理、时态问答、事件/链接预测与时态一致性维护。",
   "priority_questions": [
-    "时态知识图谱如何表示不规则时间、时间区间、持续时间与不确定时间戳，并在外推与插值设置下推理？",
-    "事件预测与链接预测类工作的评测是否可信：是否存在未来信息泄漏、随机切分高估、基线过弱？",
-    "大模型作为知识图谱构建、补全或查询组件时，如何保证事实一致与时态一致并把幻觉控制在可接受范围？",
-    "智能体的记忆与规划模块能否用时态知识图谱结构化，从而提升长程一致性、可追溯性与可解释性？",
-    "是否出现把时序或结构化推理能力做成可复现基准（代码、数据、固定时间切分）的工作？"
+    "Agent 能否通过分步规划、工具调用、子图检索和时态规则完成 TKG reasoning？它相较单次 LLM 调用或固定流水线的独立贡献是什么？",
+    "Agent 如何在时间约束下选择路径、工具与证据，处理事实有效期、时间先后、时间区间与动态更新？",
+    "TKG 作为 Agent 的长期或情节记忆时，怎样维护事件顺序、事实有效性、过期知识和冲突，并改善推理而非只增加存储？",
+    "多智能体协作、反思/验证与学习式规划是否实质改善时态图谱推理？是否有模块消融与等预算对照？",
+    "外推、插值、时态问答和多跳任务的评测是否可信？是否存在未来事实、训练数据、检索索引或时间切分造成的泄漏？",
+    "是否公平比较传统 TKG 模型、规则方法、LLM-only、RAG 和 Agent 系统，并报告调用次数、token/时间成本和失败案例？",
+    "工作是否给出代码、数据、提示词、时间切分及可复现设置？创新点相对已有工作的变化能否从证据中核实？"
   ],
   "queries": [
-    "(\"temporal knowledge graph\") AND (reasoning OR embedding OR extrapolation OR \"event prediction\")",
-    "(\"temporal knowledge graph\") AND (\"large language model\" OR LLM OR \"language model\")",
-    "(\"knowledge graph reasoning\" OR \"knowledge graph completion\") AND (benchmark OR evaluation OR reproducibility)",
-    "(\"knowledge graph\") AND (\"llm agent\" OR agentic OR \"language model agent\" OR \"multi-agent\")",
-    "(\"agent memory\" OR \"graph memory\" OR GraphRAG) AND (reasoning OR planning OR retrieval)"
+    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)",
+    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (agent OR agentic OR \"multi-agent\" OR \"tool use\" OR planning)",
+    "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (\"large language model\" OR LLM OR \"language model\")"
   ],
   "modes": {
     "all": {
-      "label": "默认全量",
+      "label": "统一主题：时态知识推理，优先 Agent×TKG",
       "queries": []
     },
-    "temporal_kg": {
-      "label": "时态知识图谱主线",
+    "agent_tkg": {
+      "label": "Agent×TKG 重点，同主题 LLM/TKG 对照",
       "queries": [
-        "(\"temporal knowledge graph\") AND (reasoning OR embedding OR extrapolation OR \"event prediction\")",
-        "(\"temporal knowledge graph\") AND (\"large language model\" OR LLM OR \"language model\")",
-        "(\"temporal knowledge graph\") OR ((\"temporal graph\") AND (reasoning OR learning OR embedding))"
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (agent OR agentic OR \"multi-agent\" OR \"tool use\" OR planning)",
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (\"large language model\" OR LLM OR \"language model\")",
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)"
+      ]
+    },
+    "temporal_kg": {
+      "label": "时态知识推理主线",
+      "queries": [
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)",
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA)"
       ]
     },
     "agent_memory": {
-      "label": "智能体记忆与结构化检索",
+      "label": "有明确时态知识推理任务的 Agent 记忆",
       "queries": [
-        "(\"knowledge graph\") AND (\"llm agent\" OR agentic OR \"language model agent\" OR \"multi-agent\")",
-        "(\"agent memory\" OR \"graph memory\" OR GraphRAG) AND (reasoning OR planning OR retrieval)"
+        "(\"agent memory\" OR \"graph memory\" OR \"episodic memory\") AND (\"knowledge graph\" OR \"knowledge base\") AND (temporal OR \"time-aware\") AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)",
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (agent OR agentic OR memory) AND (reasoning OR \"question answering\" OR extrapolation OR interpolation OR forecasting OR \"link prediction\" OR \"event prediction\" OR completion)"
       ]
     },
     "benchmark_eval": {
-      "label": "评测与可信性",
+      "label": "时态知识推理评测",
       "queries": [
-        "(\"knowledge graph reasoning\" OR \"knowledge graph completion\") AND (benchmark OR evaluation OR reproducibility)",
-        "(\"large language model\") AND (hallucination OR factuality) AND (\"knowledge graph\" OR temporal)"
+        "(\"temporal knowledge graph\" OR \"temporal knowledge graphs\" OR \"temporal knowledge reasoning\" OR TKGR OR TKGQA) AND (benchmark OR evaluation OR \"temporal split\" OR \"data leakage\" OR reproducibility)"
       ]
     }
   },
   "topic_groups": [
     {
-      "label": "时态知识图谱",
-      "weight": 100,
+      "label": "时态知识图谱推理",
+      "weight": 75,
       "terms": [
         "temporal knowledge graph",
-        "temporal knowledge",
+        "temporal knowledge graphs",
         "temporal kg",
-        "tkg",
-        "event prediction",
-        "temporal reasoning",
-        "temporal graph",
-        "temporal extrapolation",
-        "temporal interpolation",
-        "time-aware",
-        "valid time",
-        "时序知识图谱",
+        "tkg reasoning",
+        "TKGR",
         "时态知识图谱",
-        "事件预测"
+        "时序知识图谱",
+        "temporal knowledge reasoning",
+        "TKGQA",
+        "temporal knowledge base"
       ]
     },
     {
-      "label": "智能体与规划",
-      "weight": 65,
+      "label": "Agent推理与规划",
+      "weight": 45,
       "terms": [
-        "llm agent",
-        "language model agent",
-        "large language model agent",
+        "agent",
         "agentic",
-        "autonomous agent",
         "multi-agent",
-        "ai agent",
-        "agent memory",
+        "multi agent",
         "tool use",
-        "tool learning",
+        "tool-using",
+        "tool calling",
         "function calling",
-        "planning",
-        "task decomposition",
         "智能体",
         "多智能体"
       ]
     },
     {
-      "label": "结构化知识与图推理",
-      "weight": 88,
+      "label": "时态图谱记忆",
+      "weight": 25,
       "terms": [
-        "knowledge graph",
-        "knowledge graph completion",
-        "knowledge graph embedding",
-        "knowledge-based",
-        "graph reasoning",
-        "graph neural network",
-        "link prediction",
-        "relation prediction",
-        "entity linking",
-        "triple",
-        "quadruple",
-        "subgraph",
-        "kgqa",
-        "graphrag",
-        "graph retrieval",
-        "知识图谱",
-        "图推理"
+        "temporal memory",
+        "temporal graph memory",
+        "temporal memory graph",
+        "time-aware memory",
+        "time aware memory",
+        "episodic knowledge graph",
+        "dynamic knowledge memory",
+        "时态记忆",
+        "时序记忆"
       ]
     },
     {
-      "label": "大模型记忆与检索增强",
-      "weight": 60,
+      "label": "时态规则与路径",
+      "weight": 15,
       "terms": [
-        "retrieval-augmented",
-        "retrieval augmented",
-        "long-term memory",
-        "memory module",
-        "semantic memory",
-        "episodic memory",
-        "context window",
-        "hallucination",
-        "factuality",
-        "knowledge editing",
-        "chain-of-thought",
-        "检索增强"
+        "temporal rule",
+        "temporal path",
+        "time-respecting path",
+        "time respecting path",
+        "temporal logical",
+        "temporal logic",
+        "时态规则",
+        "时序规则"
       ]
     },
     {
-      "label": "评测与可复现基准",
-      "weight": 70,
+      "label": "大语言模型",
+      "weight": 15,
       "terms": [
-        "benchmark",
-        "evaluation protocol",
-        "dataset",
-        "ablation",
-        "reproducibility",
-        "open-source",
-        "state-of-the-art",
-        "leaderboard",
-        "we release",
-        "基准"
+        "large language model",
+        "language model",
+        "llm",
+        "大语言模型",
+        "大模型"
+      ]
+    },
+    {
+      "label": "时态评测与可信性",
+      "weight": 15,
+      "terms": [
+        "temporal split",
+        "chronological split",
+        "timestamp split",
+        "future information leakage",
+        "temporal consistency",
+        "temporal question answering",
+        "temporal benchmark",
+        "时间切分",
+        "时态一致性"
       ]
     }
   ],
   "cross_topic_bonuses": [
     {
       "labels": [
-        "时态知识图谱",
-        "智能体与规划"
+        "时态知识图谱推理",
+        "Agent推理与规划"
       ],
-      "bonus": 12,
-      "reason": "时态图谱作为智能体记忆与规划后端，属交叉亮点而非主线"
+      "bonus": 25,
+      "reason": "最高优先级：Agent与TKG推理直接结合；复核须确认Agent贡献和真实时间建模"
     },
     {
       "labels": [
-        "结构化知识与图推理",
-        "大模型记忆与检索增强"
+        "时态知识图谱推理",
+        "Agent推理与规划",
+        "时态图谱记忆"
       ],
-      "bonus": 8,
-      "reason": "用结构化知识支撑智能体记忆或检索后端"
+      "bonus": 20,
+      "reason": "重点交叉：时态图谱作为Agent记忆/推理后端，需有具体时态推理证据"
     },
     {
       "labels": [
-        "时态知识图谱",
-        "评测与可复现基准"
+        "时态知识图谱推理",
+        "时态评测与可信性"
       ],
-      "bonus": 15,
-      "reason": "带时间切分协议的时态推理评测是本方向核心关切"
+      "bonus": 10,
+      "reason": "支撑主线的可信时态评测与可复现验证"
     }
   ],
   "method_groups": [
     {
+      "label": "agent_planning_and_tools",
+      "terms": [
+        "tool use",
+        "tool calling",
+        "function calling",
+        "tool-using",
+        "planning",
+        "task decomposition",
+        "multi-agent",
+        "multi agent"
+      ]
+    },
+    {
+      "label": "temporal_graph_retrieval_and_memory",
+      "terms": [
+        "temporal memory",
+        "temporal retrieval",
+        "time-aware retrieval",
+        "subgraph retrieval",
+        "graph traversal",
+        "episodic knowledge graph"
+      ]
+    },
+    {
+      "label": "temporal_rule_and_symbolic_reasoning",
+      "terms": [
+        "temporal rule",
+        "rule mining",
+        "neuro-symbolic",
+        "neurosymbolic",
+        "logical rule",
+        "temporal logic",
+        "time-respecting path"
+      ]
+    },
+    {
       "label": "temporal_split_evaluation",
       "terms": [
         "temporal split",
-        "time-aware split",
-        "extrapolation setting",
-        "timestamp split",
         "chronological split",
-        "interpolation and extrapolation"
+        "timestamp split",
+        "extrapolation setting",
+        "interpolation setting",
+        "future information leakage"
       ]
     },
     {
-      "label": "graph_or_symbolic_reasoning",
+      "label": "agent_learning",
       "terms": [
-        "graph neural network",
-        "rule mining",
-        "logical rule",
-        "neuro-symbolic",
-        "subgraph retrieval",
-        "tensor decomposition",
-        "rotational embedding",
-        "knowledge graph embedding"
+        "reinforcement learning",
+        "policy optimization",
+        "trajectory optimization",
+        "trajectory learning",
+        "agent training"
       ]
     },
     {
-      "label": "agent_or_llm_experiment",
+      "label": "controlled_evaluation",
       "terms": [
-        "llm agent",
-        "tool use",
-        "multi-agent",
-        "function calling",
-        "prompting",
-        "fine-tuning",
-        "reinforcement learning from human feedback"
-      ]
-    },
-    {
-      "label": "benchmark_or_dataset_construction",
-      "terms": [
-        "we introduce a benchmark",
-        "new dataset",
-        "benchmark construction",
-        "evaluation protocol",
-        "leaderboard"
+        "ablation",
+        "error analysis",
+        "cost analysis",
+        "token budget",
+        "equal budget",
+        "same budget",
+        "statistical significance",
+        "failure analysis"
       ]
     },
     {
@@ -224,152 +249,177 @@
       "terms": [
         "code is available",
         "open-source",
+        "open source",
         "we release",
         "publicly available",
-        "reproduce"
-      ]
-    },
-    {
-      "label": "error_or_ablation_analysis",
-      "terms": [
-        "ablation study",
-        "error analysis",
-        "significance test",
-        "qualitative analysis"
+        "reproducibility"
       ]
     }
   ],
   "quality_tiers": {
-    "tier_1": [
-      "Nature",
-      "Nature Machine Intelligence",
-      "Artificial Intelligence",
-      "Journal of Machine Learning Research",
-      "IEEE Transactions on Pattern Analysis and Machine Intelligence",
-      "IEEE Transactions on Knowledge and Data Engineering",
-      "ACM Computing Surveys"
-    ],
-    "tier_2": [
-      "Information Fusion",
-      "Knowledge-Based Systems",
-      "Information Sciences",
-      "Expert Systems with Applications",
-      "Neurocomputing",
-      "Machine Learning",
-      "IEEE Transactions on Neural Networks and Learning Systems",
-      "ACM Transactions on Information Systems",
-      "Data Mining and Knowledge Discovery",
-      "Transactions of the Association for Computational Linguistics",
-      "Computational Linguistics"
-    ],
-    "tier_3": [
-      "Lecture Notes in Computer Science",
-      "Lecture Notes in Artificial Intelligence",
-      "Proceedings of Machine Learning Research",
-      "International Journal of Approximate Reasoning",
-      "World Wide Web Journal",
-      "Connection Science",
-      "Neural Processing Letters"
-    ]
+    "tier_1": [],
+    "tier_2": [],
+    "tier_3": []
   },
-  "exclusion_terms": [
-    "randomized controlled trial",
-    "single-cell",
-    "single cell",
-    "spatial transcriptomics",
-    "tumor microenvironment",
-    "genome-wide association",
-    "gene knockout",
-    "mouse model",
-    "clinical cohort",
-    "crop breeding",
-    "plant genotype",
-    "metabolite profiling",
-    "nursing",
-    "radiotherapy"
-  ],
+  "exclusion_terms": [],
   "mechanistic_terms": [
-    "time-aware representation",
-    "temporal extrapolation",
-    "valid time",
-    "rule confidence",
+    "temporal constraint",
     "temporal consistency",
-    "fact verification",
-    "ablation",
-    "significance test"
+    "valid time",
+    "temporal path",
+    "tool calling",
+    "temporal split",
+    "future information leakage"
   ],
   "strong_recommendation_rules": [
     {
       "labels": [
-        "时态知识图谱",
-        "结构化知识与图推理"
+        "时态知识图谱推理",
+        "Agent推理与规划"
       ],
       "min_score": 80,
-      "reason": "命中时态知识图谱推理主线（时间感知表示、外推/插值、时态规则或事件预测）且证据复核确认有实质推进"
+      "reason": "优先强烈推荐候选：Agent直接参与TKG reasoning；证据复核后须确认实质贡献、可信时间评测与局限"
     },
     {
       "labels": [
-        "结构化知识与图推理",
-        "评测与可复现基准"
+        "时态知识图谱推理",
+        "Agent推理与规划",
+        "时态图谱记忆"
+      ],
+      "min_score": 80,
+      "reason": "优先强烈推荐候选：时态图谱记忆支持Agent推理；须核实时间机制及对推理的独立增益"
+    },
+    {
+      "labels": [
+        "时态知识图谱推理",
+        "时态评测与可信性"
       ],
       "methods": [
         "temporal_split_evaluation"
       ],
-      "min_score": 80,
-      "reason": "提供时间切分协议与开源产物的可信时态推理评测工作"
-    },
-    {
-      "labels": [
-        "时态知识图谱",
-        "智能体与规划"
-      ],
-      "min_score": 82,
-      "reason": "时态图谱与智能体结合的交叉亮点；作为次主线门槛更高"
+      "min_score": 85,
+      "reason": "重要支撑工作：明确改善时态评测可信性或揭示数据泄漏，须经原文核实"
     }
   ],
   "roadmap_stages": [
     {
-      "label": "阶段一：时序知识表示与外推",
+      "label": "方向：Agent驱动TKG推理",
       "keywords": [
-        "temporal knowledge graph",
-        "extrapolation",
-        "event prediction",
-        "time-aware embedding",
-        "temporal reasoning"
+        "agent",
+        "planning",
+        "tool calling",
+        "multi-agent"
       ]
     },
     {
-      "label": "阶段二：推理可控与可信评测",
+      "label": "方向：时态图谱记忆与更新",
       "keywords": [
-        "benchmark",
-        "hallucination",
-        "factuality",
-        "evaluation protocol",
-        "reproducibility",
-        "temporal consistency"
+        "temporal memory",
+        "temporal consistency",
+        "valid time",
+        "episodic knowledge graph"
       ]
     },
     {
-      "label": "阶段三：智能体的结构化记忆",
+      "label": "方向：时态规则与多跳路径",
       "keywords": [
-        "agent memory",
-        "graph memory",
-        "graphrag",
-        "long-term memory",
-        "episodic memory",
-        "planning"
+        "temporal rule",
+        "temporal path",
+        "multi-hop",
+        "neuro-symbolic"
+      ]
+    },
+    {
+      "label": "方向：可信评测与复现",
+      "keywords": [
+        "temporal split",
+        "chronological split",
+        "data leakage",
+        "ablation",
+        "reproducibility"
       ]
     }
   ],
   "tags": [
-    "#时态知识图谱",
-    "#事件预测",
-    "#图推理",
-    "#评测基准",
-    "#Agent记忆",
-    "#大模型可控性"
+    "#AgentTKG",
+    "#时态知识图谱推理",
+    "#Agent规划",
+    "#时态图谱记忆",
+    "#多跳推理",
+    "#时态规则",
+    "#可信评测",
+    "#可复现性"
   ],
-  "source_preset": "computer_science",
-  "sources": [],
-  "watchlist": []
+  "disabled_sources": [
+    "openalex",
+    "crossref"
+  ],
+  "topic_scope": {
+    "name": "temporal knowledge reasoning",
+    "required_groups": [
+      {
+        "label": "知识对象",
+        "terms": [
+          "knowledge graph",
+          "knowledge base",
+          "temporal knowledge",
+          "temporal kg",
+          "TKG",
+          "TKGR",
+          "TKGQA",
+          "时态知识",
+          "时序知识",
+          "知识图谱",
+          "知识库"
+        ]
+      },
+      {
+        "label": "时间建模",
+        "terms": [
+          "temporal",
+          "time-aware",
+          "time-sensitive",
+          "time-dependent",
+          "time-indexed",
+          "time-stamped",
+          "timestamp",
+          "time interval",
+          "TKG",
+          "TKGR",
+          "TKGQA",
+          "时态",
+          "时序",
+          "时间约束",
+          "时间戳"
+        ]
+      },
+      {
+        "label": "推理任务",
+        "terms": [
+          "reasoning",
+          "inference",
+          "question answering",
+          "forecasting",
+          "extrapolation",
+          "interpolation",
+          "link prediction",
+          "event prediction",
+          "relation prediction",
+          "completion",
+          "rule learning",
+          "rule mining",
+          "TKGR",
+          "TKGQA",
+          "推理",
+          "问答",
+          "外推",
+          "插值",
+          "链接预测",
+          "事件预测",
+          "补全"
+        ]
+      }
+    ]
+  },
+  "reading_order": "venue_first"
 }

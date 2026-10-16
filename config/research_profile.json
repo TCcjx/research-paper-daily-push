@@ -22,5 +22,11 @@
   "tags": [],
   "source_preset": "general",
   "sources": [],
-  "watchlist": []
+  "watchlist": [],
+  "disabled_sources": [
+    "openalex",
+    "crossref"
+  ],
+  "topic_scope": {},
+  "reading_order": "venue_first"
 }

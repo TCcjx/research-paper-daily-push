@@ -24,7 +24,8 @@ def init_profile(args) -> None:
             raise ValueError('--topic 格式为 "主题名称=英文短语,同义词"')
         groups.append({"label": label.strip(), "weight": 80, "terms": words})
     profile = {"configured": True, "profile_name": args.name, "source_preset": args.source_preset,
-               "sources": [], "research_context": args.context or "", "priority_questions": [],
+               "sources": [], "disabled_sources": ["openalex", "crossref"], "topic_scope": {}, "reading_order": "venue_first",
+               "research_context": args.context or "", "priority_questions": [],
                "queries": args.query, "topic_groups": groups, "method_groups": [], "watchlist": [],
                "quality_tiers": {"tier_1": [], "tier_2": [], "tier_3": []},
                "exclusion_terms": [], "modes": {}, "cross_topic_bonuses": [],
@@ -44,7 +45,7 @@ def prepare_review(args) -> None:
     if target.exists():
         raise ValueError("草稿已存在，请选用新路径，避免覆盖复核结果")
     articles = []
-    for candidate in queue.get("candidates", [])[:queue.get("metadata", {}).get("maximum", 5)]:
+    for candidate in queue.get("candidates", [])[:queue.get("metadata", {}).get("maximum", 10)]:
         article = dict(candidate)
         article.update({"score_status": "pending_evidence_review", "chinese_title": "",
                         "why_worth_reading": "", "core_findings": [], "evidence": [],
@@ -54,6 +55,7 @@ def prepare_review(args) -> None:
                         "tags": candidate.get("matched_topics") or [], "strong_recommendation": False})
         articles.append(article)
     draft = {"date": queue["date"], "report_style": "brief", "term_explanation_mode": "off",
+             "topic_scope": queue.get("topic_scope", {}),
              "metadata": queue.get("metadata", {}), "radar": queue.get("radar", {}),
              "updates": queue.get("updates_not_for_new_push", []),
              "articles": articles, "research_ideas": []}

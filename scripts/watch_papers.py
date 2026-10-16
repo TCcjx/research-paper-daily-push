@@ -10,8 +10,10 @@ from common import clean_text, json_request, normalize_doi, text_request
 from search_papers import _arxiv_entry, _crossref_date, ATOM_NS
 
 
-def check_watchlist(items: list[dict], limit: int = 20) -> tuple[list[dict], list[str]]:
+def check_watchlist(items: list[dict], limit: int = 20, *, sources: list[str] | None = None) -> tuple[list[dict], list[str]]:
+    active = set(sources if sources is not None else ["arxiv"])
     papers, errors, seen, arxiv = [], [], set(), []
+    unavailable = 0
     for item in items:
         if not isinstance(item, dict):
             continue
@@ -23,9 +25,11 @@ def check_watchlist(items: list[dict], limit: int = 20) -> tuple[list[dict], lis
         if len(seen) >= limit:
             break
         seen.add(identity)
-        if arxiv_id:
+        if arxiv_id and "arxiv" in active:
             arxiv.append(arxiv_id)
-        if not doi:
+        if not doi or "crossref" not in active:
+            if not (arxiv_id and "arxiv" in active):
+                unavailable += 1
             continue
         try:
             item = json_request(f"https://api.crossref.org/works/{quote(doi, safe='')}")["message"]
@@ -50,4 +54,6 @@ def check_watchlist(items: list[dict], limit: int = 20) -> tuple[list[dict], lis
             papers.extend(_arxiv_entry(e) for e in root.findall(f"{ATOM_NS}entry"))
         except Exception as exc:
             errors.append(f"关注论文 arXiv 查询失败：{type(exc).__name__}")
+    if unavailable:
+        errors.append(f"{unavailable} 篇关注论文在当前启用来源中无法检查版本/出版更新；未调用暂停或未选用的来源")
     return papers, errors

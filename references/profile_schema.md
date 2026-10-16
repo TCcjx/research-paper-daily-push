@@ -24,14 +24,29 @@
 - `strong_recommendation_rules`：包含 `labels`、可选 `methods`、`min_score` 和 `reason` 的条目。所有已配置条件都必须同时命中。
 - `roadmap_stages`：包含 `label` 和 `keywords` 的条目，只用于在研究记忆中归类已经确认的报告。
 - `tags`：偏好的报告标签。
+- `reading_order`：`venue_first` 或 `score`。新模板/初始化采用 venue_first，同主题内已核实 CCF A 类优先，再比较其他等级及贡献；收集查看完整30天，仍区分当日/补充。旧配置不填时保持 score。场所等级排序不放宽 topic_scope；A类不足允许其他同主题论文补充。默认推荐目标10篇、候选上限100篇，命令行可调整。
+- `topic_scope`：可选硬性主题范围，见下例。缺省或 `{}` 表示不启用；配置后每个必要概念组至少命中一个短语，组间为 AND，组内为 OR。只匹配题名与摘要，英文按词边界匹配并兼容复数与连字符。
+
+```json
+"topic_scope": {
+  "name": "temporal knowledge reasoning",
+  "required_groups": [
+    {"label": "知识对象", "terms": ["knowledge graph", "temporal knowledge", "TKGR"]},
+    {"label": "时间建模", "terms": ["temporal", "time-aware", "TKGR"]},
+    {"label": "推理任务", "terms": ["reasoning", "forecasting", "question answering", "TKGR"]}
+  ]
+}
+```
+
+准入应用于收集、独立排序、趋势统计和最终交付；topic_groups 的高分不能覆盖它。输出保留 `topic_scope_match` 的命中与缺失组。摘要缺失且题名不足时暂不纳入，先从可信原文补全摘要再重筛；关键词准入不等同于科学相关性已复核。主题内候选不足才扩展日期窗口，不用相邻领域填充。完整同义词表示例见 [时态知识推理配置](../examples/research_profile.temporal-kg.json)。
 
 ## 聚焦模式查询写法
 
 聚焦模式（`modes`）的查询建议采用「精确查询 + 兜底查询」的组合：
 
 - 先写一到两条精确查询：用引号短语加 AND 限定词，保证命中结果与方向高度相关。
-- 再加一条裸短语兜底查询：把核心短语单独作为 OR 分支，或只配宽松限定词。它可以捕捉不含限定词、但确实属于本方向的相关论文（例如只写 "temporal graph representation learning" 而不含 reasoning/embedding 等词的工作）。
-- 兜底查询召回更宽，会放大各来源的检索噪声：Crossref 会把布尔查询拆成普通词检索，宽词误命中尤其多。初筛分数只是元数据排序信号，低于70分仍可进入广泛复核队列，入选与否必须以人工摘要复核为准。
+- 兜底查询仍保留核心研究对象，可去掉 Agent/LLM 等实现限定，不能退化为泛图学习或泛 Agent 查询。
+- 召回结果须通过同一 topic_scope。初筛分数只是元数据排序信号，低于70分仍可进入主题内复核队列，入选与否必须以摘要或全文复核为准。
 
 精确查询与兜底查询都应在自然语言主题文件中有对应描述，保持两个文件一致。
 
@@ -39,9 +54,11 @@
 
 ## 来源和关注列表
 
-source_preset：general / computer_science / biomedical，默认为general。sources：来源标识数组，非空时覆盖预设；命令行 --sources 最高优先级。可用标识为 europepmc、crossref、openalex、semanticscholar、biorxiv、arxiv。
+source_preset：general / computer_science 默认 arxiv；biomedical 默认 europepmc、biorxiv。sources：来源标识数组，非空时覆盖预设；命令行 --sources 优先。可用标识为 europepmc、crossref、openalex、semanticscholar、biorxiv、arxiv。
 
-watchlist：对象数组，每项含真实 doi 或 arxiv 编号，优先检查显式关注，再检查最近交付记录；默认合计最多20篇。--watch-limit 可调整，0关闭。不能用占位符运行。
+disabled_sources：暂停来源名单，模板/初始化默认 `["openalex", "crossref"]`。暂停来源不得出现在最终启用列表，否则在联网前报错。命令行不能绕过；恢复适配器先移出名单再明确启用。旧配置未填写此字段仍兼容，但来源预设已移除这两个接口。
+
+watchlist：对象数组，每项含真实 doi 或 arxiv 编号，优先检查显式关注，再检查最近交付记录；默认合计最多20篇。只使用本次启用来源，arxiv 负责版本，crossref 启用后才检查 DOI 出版信息。无法检查的记录明确提示。--watch-limit 可调整，0关闭。不能用占位符运行。
 
 研究配置的 method_groups 应按领域填写，不提供时方法分只是缺信息的代理值，不应当作方法学质量结论。场所默认 label_only，不排除预印本/未收录场所；权威性过滤仅在用户明确选择时启用。
 

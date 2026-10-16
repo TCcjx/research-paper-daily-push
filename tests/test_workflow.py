@@ -37,14 +37,14 @@ class WorkflowTests(unittest.TestCase):
             self.invoke(["init-profile", "--name", "Overwrite", "--query", "topic", "--topic", "T=topic",
                          "--output", str(self.profile)])
         raw = {"date_from": "2026-09-17", "date_to": "2026-10-16", "queries": ["topic"],
-               "sources_requested": ["crossref"], "source_counts": {"crossref": 1},
+               "sources_requested": ["arxiv"], "source_counts": {"arxiv": 1},
                "retrieved_count": 1, "unique_relevant_count": 1, "status": "ok", "errors": [],
                "coverage_warnings": [], "papers": [{"title": "topic fixture", "doi": "10.1000/fixture",
                 "abstract": "topic", "publication_date": "2026-10-16", "url": "https://example.org/paper",
                 "journal": "arXiv", "article_type": "preprint", "is_preprint": True}]}
         with patch.object(run_daily, "collect", return_value=raw):
             self.invoke(["collect", "--profile", str(self.profile), "--to-date", "2026-10-16",
-                         "--sources", "crossref", "--output-dir", str(self.root / "run"), "--watch-limit", "0",
+                         "--sources", "arxiv", "--output-dir", str(self.root / "run"), "--watch-limit", "0",
                          "--observations", str(self.observations), "--history", str(self.history), "--memory", str(self.memory)])
         queue = self.root / "run" / "review_queue.json"
         reviewed = self.root / "reviewed.json"
@@ -68,7 +68,7 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.invoke(command)
         weekly = self.root / "weekly.md"
-        self.invoke(["weekly", "--profile", str(self.profile), "--sources", "crossref",
+        self.invoke(["weekly", "--profile", str(self.profile), "--sources", "arxiv",
                      "--observations", str(self.observations), "--to-date", "2026-10-16", "--output", str(weekly)])
         self.assertIn("实际观测 1 天", weekly.read_text(encoding="utf-8"))
         self.assertFalse(self.history.with_suffix(".lock").exists())
@@ -84,7 +84,7 @@ class WorkflowTests(unittest.TestCase):
     def test_watchlist_is_bounded_and_failure_is_nonfatal(self):
         items = [{"doi": f"10.1000/{i}"} for i in range(10)]
         with patch("watch_papers.json_request", side_effect=RuntimeError("offline")) as request, patch("watch_papers.time.sleep"):
-            papers, errors = check_watchlist(items, limit=2)
+            papers, errors = check_watchlist(items, limit=2, sources=["crossref"])
         self.assertEqual(request.call_count, 2)
         self.assertEqual(papers, [])
         self.assertEqual(len(errors), 2)

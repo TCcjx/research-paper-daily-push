@@ -11,6 +11,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from common import ChineseArgumentParser, clean_text, load_json, normalize_doi, normalize_title, looks_like_preprint
+from topic_scope import require_scope, validate_scope
+from venue_ranking import reading_sort_key, venue_priority, venue_importance
 
 REQUIRED_INSPIRATION = ("methods", "limitations_validation")
 
@@ -152,6 +154,13 @@ def validate_article(
             errors.append(f"{prefix}.assessment.importance 必须是0–100整数，与热度分开评价")
         if assessment.get("confidence") not in {"high", "medium", "low"}:
             errors.append(f"{prefix}.assessment.confidence 必须是 high/medium/low")
+        if assessment.get("importance_basis") == "venue_60_contribution_40":
+            contribution = assessment.get("contribution_importance")
+            venue_score = assessment.get("venue_importance")
+            if type(contribution) is not int or not 0 <= contribution <= 100 or venue_score != venue_importance(article):
+                errors.append(f"{prefix}.assessment 的场所/贡献重要性分量无效")
+            elif assessment.get("importance") != round(venue_score * .6 + contribution * .4):
+                errors.append(f"{prefix}.assessment.importance 与场所60%+贡献40%不一致")
         weights = {"relevance": .4, "novelty": .2, "quality": .15, "methodology": .15, "inspiration": .1}
         if all(type(component_scores.get(k)) is int for k in weights):
             expected = round(sum(component_scores[k] * w for k, w in weights.items()))
@@ -206,10 +215,13 @@ def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -
         preprint = "｜预印本，未经正式同行评议" if article.get("is_preprint") or "preprint" in article.get("article_type", "").lower() else ""
         lines = [heading, "", f"[{clean_text(article['title'])}]({article['url']})", "",
                  f"{article['journal']}｜{article['publication_date']}｜{lane}{preprint}",
+                 *([_venue_line(article)] if _venue_line(article) else []),
                  f"推荐 {article['recommendation_score']}/100｜重要性 {assessment.get('importance', '待核实')}/100｜证据置信度：{confidence}",
                  "", f"**为什么值得读：** {article['why_worth_reading']}",
                  f"**主要贡献：** {assessment.get('contribution', '需要核实')}",
                  f"**相较已有工作：** {assessment.get('comparison', '尚未完成独立对比')}", ""]
+        if assessment.get("importance_basis") == "venue_60_contribution_40":
+            lines += [f"**阅读重要性依据：** 场所 {assessment['venue_importance']}×60% + 贡献 {assessment['contribution_importance']}×40%（个人优先级）。", ""]
         signal = article.get("attention_signals") or {}
         if signal.get("status") == "observed":
             changes = "; ".join(f"{source} {delta:+d}" for source, delta in signal.get("citation_deltas", {}).items())
@@ -221,6 +233,8 @@ def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -
                   "**可借鉴方法：** " + "; ".join(_list((article.get("research_inspiration") or {}).get("methods")))]
         if strong:
             lines += ["**强烈推荐依据：** " + "; ".join(_list(article.get("strong_recommendation_reasons")))]
+        if isinstance(article.get("venue_evidence"), dict) and valid_url(article["venue_evidence"].get("url")):
+            lines.append(f"- 发表场所证据：[正式论文记录]({article['venue_evidence']['url']})")
         for item in article.get("evidence", []):
             lines.append(f"- 证据（{item['kind']}）：[{'; '.join(_list(item['supports']))}]({item['url']})")
         lines += ["", "**重点标记：** " + " ".join(_list(article.get("tags")))]
@@ -291,6 +305,10 @@ def render_article(article: dict[str, Any], rank: int, detailed: bool = False) -
     assessment = article.get("assessment") or {}
     sections += [f"**相较已有工作：** {assessment.get('comparison', '需要核实')}",
                  f"**证据置信度：** {assessment.get('confidence', '需要核实')}｜重要性：{assessment.get('importance', '待核实')}/100"]
+    if assessment.get("importance_basis") == "venue_60_contribution_40":
+        sections.append(f"**阅读重要性依据：** 场所 {assessment['venue_importance']}×60% + 贡献 {assessment['contribution_importance']}×40%（个人优先级）。")
+    if isinstance(article.get("venue_evidence"), dict) and valid_url(article["venue_evidence"].get("url")):
+        sections.append(f"- 发表场所证据：[正式论文记录]({article['venue_evidence']['url']})")
     sections.extend(["", f"**重点标记：** {tags}"])
     return "\n".join(sections)
 
@@ -361,6 +379,8 @@ def render_discovery(queue: dict) -> str:
              f"检索窗口：{metadata['window']}", f"趋势样本：{metadata['trend_window']}", "",
              "以下为检索元数据和待复核候选，不能视为重点论文推荐或已验证研究结论。", ""]
     lines += [f"> {w}" for w in metadata.get("warnings", [])]
+    if metadata.get("topic_scope_name"):
+        lines += [f"核心主题：{metadata['topic_scope_name']}；已排除 {metadata.get('off_topic_count', 0)} 篇关键词相关但不满足主题准入的记录。", ""]
     lines += render_radar(queue.get("radar") or {})
     lines += render_updates(queue.get("updates_not_for_new_push", []) + (queue.get("radar") or {}).get("observed_updates", []))
     for lane, name in (("daily", "当日待复核"), ("supplementary", "近期补充待复核")):
@@ -376,6 +396,7 @@ def render_discovery(queue: dict) -> str:
 
 
 def render_report(payload: dict[str, Any], strict: bool = True) -> str:
+    validate_scope(payload.get("topic_scope"))
     articles = payload.get("articles", [])
     if not isinstance(articles, list):
         raise TypeError("articles 必须是数组")
@@ -390,10 +411,23 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         except (TypeError, ValueError):
             errors.append("date 必须是有效的 YYYY-MM-DD 日期")
     require_term_explanations = clean_text(payload.get("term_explanation_mode")).casefold() == "dual"
+    reading_order = (payload.get("metadata") or {}).get("reading_order", "score")
+    if reading_order not in {"score", "venue_first"}:
+        errors.append("metadata.reading_order 必须是 score/venue_first")
     for index, article in enumerate(articles):
         if not isinstance(article, dict):
             errors.append(f"article[{index}] 必须是对象")
         else:
+            require_scope(article, payload.get("topic_scope"))
+            if strict and reading_order == "venue_first":
+                if (article.get("assessment") or {}).get("importance_basis") != "venue_60_contribution_40":
+                    errors.append(f"article[{index}] 请通过 deliver 生成场所优先的重要性评分")
+                if venue_priority(article) > 0:
+                    evidence = article.get("venue_evidence") or {}
+                    kind = (article.get("venue_ranking") or {}).get("kind")
+                    allowed_types = {"full", "regular"} if kind == "conference" else {"journal"}
+                    if not isinstance(evidence, dict) or not valid_url(evidence.get("url")) or evidence.get("publication_type") not in allowed_types:
+                        errors.append(f"article[{index}].venue_evidence 需记录正式论文页面 url 和 publication_type（full/regular/journal），不能只引用目录或录用自述")
             errors.extend(validate_article(article, index, strict, require_term_explanations))
     ideas = _list(payload.get("research_ideas"))
     if len(ideas) > 3:
@@ -423,7 +457,8 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
     metadata = payload.get("metadata") or {}
     retrieved = int(metadata.get("retrieved_count") or 0)
     screened = int(metadata.get("screened_count") or 0)
-    articles = sorted(articles, key=lambda item: int(item.get("recommendation_score") or 0), reverse=True)
+    articles = sorted(articles, key=reading_sort_key if reading_order == "venue_first"
+                      else lambda item: int(item.get("recommendation_score") or 0), reverse=True)
     parts = [
         "# 【今日科研文献雷达】",
         "",
@@ -434,6 +469,10 @@ def render_report(payload: dict[str, Any], strict: bool = True) -> str:
         "",
     ]
     parts += [f"检索窗口：{metadata.get('window', '未提供，需核实')}", ""]
+    if payload.get("topic_scope"):
+        parts += [f"核心主题：{payload['topic_scope']['name']}", ""]
+    if reading_order == "venue_first":
+        parts += ["阅读顺序：同主题内已核实 CCF A 类优先，再参考其他场所等级、相关性和贡献；未核实录用不按 A 类计算。重要性按场所60%与贡献40%计算，为个人阅读优先级。", ""]
     parts += render_radar(payload.get("radar") or {})
     parts += render_updates(payload.get("updates") or [])
     venue_summary = render_venue_distribution(metadata.get("venue_distribution"))

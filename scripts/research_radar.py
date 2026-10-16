@@ -9,6 +9,7 @@ from typing import Any
 
 from common import clean_text, normalize_title, paper_key
 from profile_config import topic_groups
+from topic_scope import assess_scope, term_matches
 
 
 def scope_key(profile: dict, queries: list[str], sources: list[str]) -> str:
@@ -31,9 +32,11 @@ def analyze(raw: dict, profile: dict, state: dict, *, today: str) -> tuple[dict,
     groups = topic_groups(profile)
     records, paper_signals, updates = [], {}, []
     for paper in raw.get("papers", []):
+        if not assess_scope(paper, profile.get("topic_scope"))["in_scope"]:
+            continue
         identity = paper_key(paper)
         text = f"{paper.get('title', '')} {paper.get('abstract', '')}".casefold()
-        labels = [g["label"] for g in groups if any(t.casefold() in text for t in g["terms"])]
+        labels = [g["label"] for g in groups if any(term_matches(text, t) for t in g["terms"])]
         record = {"key": identity, "normalized_title": normalize_title(paper.get("title")),
                   "title": paper.get("title"), "url": paper.get("url"),
                   "publication_date": paper.get("publication_date", ""), "topics": labels,

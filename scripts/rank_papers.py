@@ -20,6 +20,7 @@ from common import (
     utc_now_iso,
 )
 from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, named_term_groups, topic_groups
+from topic_scope import term_matches
 from venue_ranking import (
     DEFAULT_RANKING,
     VenueRankingError,
@@ -29,6 +30,7 @@ from venue_ranking import (
     summarize_queue,
 )
 from venue_ranking import classify as classify_venue
+from venue_ranking import venue_priority, reading_sort_key, CCF_RANK
 
 WEIGHTS = {
     "relevance": 0.40,
@@ -48,7 +50,7 @@ EXCLUDE_TYPES = (
 
 
 def contains_any(text: str, terms: list[str] | tuple[str, ...] | set[str]) -> bool:
-    return any(clean_text(term).casefold() in text for term in terms if clean_text(term))
+    return any(term_matches(text, term) for term in terms if clean_text(term))
 
 
 def normalize_journal(journal: str) -> str:
@@ -221,6 +223,8 @@ def strong_recommendation(
 
 
 def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, Any] | None = None) -> dict[str, Any]:
+    from topic_scope import assess_scope
+    scope_match = assess_scope(paper, profile.get("topic_scope"))
     text = f" {paper.get('title', '')} {paper.get('abstract', '')} ".casefold()
     relevance, topics, relevance_evidence = score_relevance(text, profile)
     methods = matched_methods(text, profile)
@@ -242,6 +246,8 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
     }
     score = round(sum(component_scores[key] * WEIGHTS[key] for key in WEIGHTS))
     reasons = exclusion_reasons(paper, text, relevance, profile)
+    if not scope_match["in_scope"]:
+        reasons.append("不符合核心主题；缺少：" + "、".join(scope_match["missing_groups"]))
     if classification is not None:
         reasons.extend(apply_policy(paper, classification, relevance, ranking, has_configured_tier=tier is not None))
     if not paper.get("abstract"):
@@ -284,7 +290,10 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
             },
             "excluded": bool(reasons),
             "exclusion_reasons": reasons,
-            "strong_recommendation_candidate": strong,
+            "topic_scope_match": scope_match,
+            "configured_journal_tier": next((name for name, value in (("tier_1", 93), ("tier_2", 84), ("tier_3", 74))
+                                             if value == tier and not paper.get("is_preprint")), None),
+            "strong_recommendation_candidate": strong and not reasons,
             "strong_recommendation_reasons": strong_reasons,
         }
     )
@@ -292,10 +301,26 @@ def rank_one(paper: dict[str, Any], profile: dict[str, Any], ranking: dict[str, 
 
 
 
-def select_review_candidates(ranked: list[dict[str, Any]], limit: int) -> list[dict[str, Any]]:
+def select_review_candidates(ranked: list[dict[str, Any]], limit: int, *, reading_order: str = "score") -> list[dict[str, Any]]:
     """按日期优先，以主题轮转保证小主题有复核机会；不使用总分硬截断。"""
     eligible = [p for p in ranked if not p["excluded"]]
+    if reading_order == "venue_first":
+        # 先按场所分层，再在每层内轮转主题，低等级不能因轮转抢占 A 类位置。
+        selected = []
+        for priority in sorted({venue_priority(p) for p in eligible}, reverse=True):
+            band = [p for p in eligible if venue_priority(p) == priority]
+            # 待核实录用只影响“先核实谁”，不提升最终阅读等级。
+            band.sort(key=lambda p: (CCF_RANK.get((p.get("venue_ranking") or {}).get("candidate_ccf"), 0),
+                                     reading_sort_key(p)), reverse=True)
+            selected += _round_robin_candidates(band, limit - len(selected))
+            if len(selected) >= limit:
+                break
+        return selected
     eligible.sort(key=lambda p: (p.get("publication_date", ""), p.get("component_scores", {}).get("relevance", 0), p["recommendation_score"]), reverse=True)
+    return _round_robin_candidates(eligible, limit)
+
+
+def _round_robin_candidates(eligible: list[dict], limit: int) -> list[dict]:
     buckets: dict[str, list[dict]] = {}
     for p in eligible:
         labels = p.get("matched_topics") or ["其他"]
@@ -324,11 +349,13 @@ def rank_payload(
     ranking: dict[str, Any] | None = None,
     threshold: int = 70,
     maximum: int = 10,
-    candidate_limit: int = 50,
+    candidate_limit: int = 100,
 ) -> dict[str, Any]:
     papers = extract_papers(payload)
     ranked = [rank_one(paper, profile, ranking) for paper in papers]
-    ranked.sort(key=lambda item: (item["excluded"], -item["recommendation_score"], item.get("title", "")))
+    order = profile.get("reading_order", "score")
+    ranked.sort(key=reading_sort_key if order == "venue_first" else lambda item: item["recommendation_score"], reverse=True)
+    ranked.sort(key=lambda item: item["excluded"])
     recommendations = [
         item for item in ranked if not item["excluded"] and item["recommendation_score"] >= threshold
     ][:maximum]
@@ -344,7 +371,8 @@ def rank_payload(
         "authority_policy": (ranking.get("policy") or {}) if ranking else {},
         "venue_distribution": summarize_queue(recommendations, ranking) if ranking else {},
         "recommendations": recommendations,
-        "review_candidates": select_review_candidates(ranked, candidate_limit),
+        "reading_order": order,
+        "review_candidates": select_review_candidates(ranked, candidate_limit, reading_order=order),
         "ranked_papers": ranked,
     }
 

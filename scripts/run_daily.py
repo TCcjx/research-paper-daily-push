@@ -21,12 +21,13 @@ from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, profile_
 from search_papers import collect
 from deduplicate import filter_history, load_history
 from rank_papers import rank_payload, select_review_candidates
-from venue_ranking import load_ranking, DEFAULT_RANKING
+from venue_ranking import load_ranking, DEFAULT_RANKING, classify, apply_venue_importance, summarize_queue
 from research_radar import analyze
 from common import paper_key, deduplicate_papers, workflow_lock, normalize_doi, normalize_title
 from watch_papers import check_watchlist
 from project_cli import add_commands, init_profile, prepare_review, weekly_report
 from update_research_memory import build_context, load_memory
+from topic_scope import require_scope, assess_scope
 
 SCRIPT_DIR = Path(__file__).resolve().parent
 SKILL_DIR = SCRIPT_DIR.parent
@@ -53,7 +54,7 @@ def collect_stage(args: argparse.Namespace) -> Path:
     try:
         # 一次取30天样本，再本地切窗。避免每次扩窗重复请求同一批论文。
         raw = collect(queries=queries, start=end - timedelta(days=29), end=end,
-                      sources=sources, relevance_terms=profile_terms(profile))
+                      sources=sources, relevance_terms=profile_terms(profile), topic_scope=profile.get("topic_scope"))
     except Exception as exc:
         atomic_write_json(queue_path, {"status": "failed", "date": today,
                                       "error": str(exc), "candidates": []})
@@ -63,7 +64,8 @@ def collect_stage(args: argparse.Namespace) -> Path:
     atomic_write_json(output_dir / "search_30d.json", raw)
     ranking = load_ranking(args.ranking)
     history = load_history(args.history)
-    watched, watch_errors = check_watchlist((profile.get("watchlist") or []) + list(reversed(history)), args.watch_limit)
+    watched, watch_errors = check_watchlist((profile.get("watchlist") or []) + list(reversed(history)), args.watch_limit, sources=sources)
+    watched = [p for p in watched if assess_scope(p, profile.get("topic_scope"))["in_scope"]]
     fresh = filter_history(raw["papers"], history)
     watched_updates = filter_history(watched, history)["updates"]
     fresh["updates"] = deduplicate_papers(fresh["updates"] + watched_updates)
@@ -83,25 +85,37 @@ def collect_stage(args: argparse.Namespace) -> Path:
         used_days = days
         cutoff = (end - timedelta(days=days-1)).isoformat()
         pool = [p for p in eligible if cutoff <= p.get("publication_date", "") <= today]
-    # 当日与近期补充各自选取，旧论文不能挤掉当天候选。
-    candidates = select_review_candidates(recent, args.candidate_limit)
-    recent_keys = {paper_key(p) for p in candidates}
-    candidates += select_review_candidates([p for p in pool if paper_key(p) not in recent_keys],
-                                           args.candidate_limit - len(candidates))
+    reading_order = profile.get("reading_order", "score")
+    if reading_order == "venue_first":
+        # 场所优先时查看完整30天，避免当日预印本占满候选而漏掉近期 A 类论文。
+        used_days, pool = 30, eligible
+        candidates = select_review_candidates(pool, args.candidate_limit, reading_order=reading_order)
+    else:
+        candidates = select_review_candidates(recent, args.candidate_limit)
+        recent_keys = {paper_key(p) for p in candidates}
+        candidates += select_review_candidates([p for p in pool if paper_key(p) not in recent_keys],
+                                               args.candidate_limit - len(candidates))
     for p in candidates:
         p["reading_lane"] = "daily" if p.get("publication_date", "") >= recent_start else "supplementary"
         p["attention_signals"] = radar["paper_signals"].get(paper_key(p), {})
     warnings = [f"{e['source']}: {e['error']}" for e in raw.get("errors", [])]
     warnings += raw.get("coverage_warnings", []) + watch_errors
     if len(eligible) > len(candidates):
-        warnings.append(f"本次有 {len(eligible)} 篇可复核论文，预算内展示 {len(candidates)} 篇；其余可在 ranked_30d.json 检查")
+        warnings.append(f"30天内有 {len(eligible)} 篇主题内可复核论文，本次窗口与候选上限内展示 {len(candidates)} 篇；其余见 ranked_30d.json")
     used_window = ("近24小时优先（按日级日期，候选池覆盖今天和昨天）" if used_days == 2
                    else f"最近{used_days}天（相关候选不足{args.min_results}篇，近期补充单独标注）")
+    if reading_order == "venue_first":
+        used_window = "最近30天（同主题内场所等级优先，当日与近期补充按实际日期标注）"
     queue = {
         "status": raw.get("status", "ok"), "generated_at": utc_now_iso(), "date": today,
         "mode": args.mode, "profile_name": profile.get("profile_name", ""),
+        "topic_scope": profile.get("topic_scope", {}),
         "metadata": {"window": used_window, "trend_window": f"{raw['date_from']} 至 {today}",
                      "retrieved_count": raw["retrieved_count"], "unique_relevant_count": raw["unique_relevant_count"],
+                     "off_topic_count": raw.get("off_topic_count", 0),
+                     "topic_scope_name": (profile.get("topic_scope") or {}).get("name", ""),
+                     "disabled_sources": profile.get("disabled_sources", []),
+                     "reading_order": reading_order,
                      "new_after_history_count": fresh["new_count"],
                      "screened_count": all_ranked["screened_count"],
                      "preliminary_recommended_count": all_ranked["recommended_count"],
@@ -132,6 +146,12 @@ def deliver_stage(args: argparse.Namespace) -> Path:
     reviewed_payload = load_json(reviewed_path, {})
     if not isinstance(reviewed_payload, dict):
         raise ValueError("已复核报告必须是 JSON 对象")
+    active_profile = load_profile(args.profile, require_configured=False)
+    profile_scope = active_profile.get("topic_scope")
+    for paper in reviewed_payload.get("articles", []):
+        require_scope(paper, profile_scope)
+    if profile_scope:
+        reviewed_payload["topic_scope"] = profile_scope
     if not args.skip_push or args.record_local_report:
         check = filter_history(reviewed_payload.get("articles", []), load_history(args.history))
         if check["duplicates"] or check["updates"]:
@@ -146,13 +166,41 @@ def deliver_stage(args: argparse.Namespace) -> Path:
         for p in reviewed_payload.get("articles", []):
             if normalize_doi(p.get("doi")) not in allowed_dois and normalize_title(p.get("title")) not in allowed_titles:
                 raise ValueError("推荐论文不在对应复核队列中，请先将补充检索的论文纳入队列")
+            require_scope(p, queue.get("topic_scope"))
+            candidate = next(c for c in allowed if
+                             (normalize_doi(p.get("doi")) and normalize_doi(p.get("doi")) == normalize_doi(c.get("doi")))
+                             or normalize_title(p.get("title")) == normalize_title(c.get("title")))
+            # 复核文字不能把原本偏题的论文重新包装为核心主题。
+            original = {**candidate, "abstract": candidate.get("abstract") or p.get("abstract", "")}
+            require_scope(original, profile_scope)
+            require_scope(original, queue.get("topic_scope"))
             cutoff = (datetime.fromisoformat(queue["date"]).date() - timedelta(days=1)).isoformat()
             p["reading_lane"] = "daily" if p.get("publication_date", "") >= cutoff else "supplementary"
             p["attention_signals"] = (queue.get("radar") or {}).get("paper_signals", {}).get(paper_key(p), {})
         reviewed_payload["radar"] = queue.get("radar", {})
+        if queue.get("topic_scope"):
+            reviewed_payload["topic_scope"] = queue["topic_scope"]
         reviewed_payload["updates"] = queue.get("updates_not_for_new_push", []) + (queue.get("radar") or {}).get("observed_updates", [])
         reviewed_payload["metadata"] = {**reviewed_payload.get("metadata", {}), **queue.get("metadata", {})}
         reviewed_path = report_path.with_suffix(".reviewed.json")
+    elif profile_scope:
+        reviewed_path = report_path.with_suffix(".reviewed.json")
+    # 当前配置优先，旧队列不能覆盖已经更新的阅读偏好。
+    reading_order = active_profile.get("reading_order", (reviewed_payload.get("metadata") or {}).get("reading_order", "score"))
+    reviewed_payload.setdefault("metadata", {})["reading_order"] = reading_order
+    if reading_order == "venue_first":
+        ranking = load_ranking(args.ranking)
+        from rank_papers import configured_tier_score
+        for paper in reviewed_payload.get("articles", []):
+            # 重新匹配实际发表场所，不沿用可编辑 JSON 中手填的 A 类标签。
+            paper["venue_ranking"] = classify(paper, ranking)
+            tier_score = configured_tier_score(paper, active_profile)
+            paper["configured_journal_tier"] = next((name for name, value in (("tier_1", 93), ("tier_2", 84), ("tier_3", 74))
+                                                     if value == tier_score and not paper.get("is_preprint")), None)
+            apply_venue_importance(paper)
+        reviewed_payload["metadata"]["venue_distribution"] = summarize_queue(reviewed_payload.get("articles", []), ranking)
+        reviewed_path = report_path.with_suffix(".reviewed.json")
+    if args.queue or profile_scope or reading_order == "venue_first":
         atomic_write_json(reviewed_path, reviewed_payload)
     run_script("summarize_papers.py", "--input", str(reviewed_path), "--output", str(report_path))
 
@@ -216,7 +264,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     collect_parser.add_argument("--ranking", default=str(DEFAULT_RANKING))
     collect_parser.add_argument("--observations", default=str(SKILL_DIR / "data" / "observations.json"))
     collect_parser.add_argument("--to-date", help="报告日期 YYYY-MM-DD，默认为本地今天")
-    collect_parser.add_argument("--candidate-limit", type=integer_range(1, 200), default=50, help="广泛复核池上限，独立于最终推荐数")
+    collect_parser.add_argument("--candidate-limit", type=integer_range(1, 200), default=100, help="广泛复核池上限，默认100，独立于最终推荐数")
     collect_parser.add_argument("--history", default=str(DEFAULT_HISTORY))
     collect_parser.add_argument("--memory", default=str(DEFAULT_MEMORY))
     collect_parser.add_argument("--output-dir")
@@ -230,14 +278,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     collect_parser.add_argument(
         "--min-results",
         type=integer_range(1, 50, "篇"),
-        default=5,
+        default=10,
         metavar="1-50",
-        help="相关候选不足该数量时补充近期论文；默认为5篇",
+        help="相关候选不足该数量时补充近期论文；默认为10篇",
     )
     collect_parser.add_argument(
         "--max-results",
         type=integer_range(1, 10, "篇"),
-        default=5,
+        default=10,
         metavar="1-10",
         help="最终推荐目标上限（1–10），不用于截断复核池",
     )
@@ -249,6 +297,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     deliver_parser.add_argument("--history", default=str(DEFAULT_HISTORY))
     deliver_parser.add_argument("--memory", default=str(DEFAULT_MEMORY))
     deliver_parser.add_argument("--profile", default=str(DEFAULT_PROFILE))
+    deliver_parser.add_argument("--ranking", default=str(DEFAULT_RANKING))
     deliver_parser.add_argument("--provider", choices=("auto", "wxpusher", "serverchan", "wecom"), default="auto")
     deliver_parser.add_argument("--skip-push", action="store_true")
     deliver_parser.add_argument("--record-local-report", action="store_true")

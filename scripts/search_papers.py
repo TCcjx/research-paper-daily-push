@@ -31,6 +31,7 @@ from common import (
     utc_now_iso,
 )
 from profile_config import DEFAULT_PROFILE, ProfileError, load_profile, profile_queries, profile_terms, profile_sources
+from topic_scope import assess_scope, validate_scope
 
 API_SOURCES = ("europepmc", "crossref", "semanticscholar", "openalex", "biorxiv", "arxiv")
 
@@ -577,7 +578,9 @@ def collect(
     end: date,
     sources: list[str],
     relevance_terms: list[str],
+    topic_scope: dict | None = None,
 ) -> dict[str, Any]:
+    validate_scope(topic_scope)
     papers: list[dict[str, Any]] = []
     counts: dict[str, int] = {}
     errors: list[dict[str, str]] = []
@@ -603,6 +606,18 @@ def collect(
         paper for paper in deduplicate_papers(papers)
         if plausible_relevance(paper, relevance_terms)
     ]
+    keyword_count = len(merged)
+    # 准入先于时间窗口和活跃度统计，宽泛的 Agent 等关键词不能补足核心候选数。
+    scoped, out_of_scope = [], []
+    for paper in merged:
+        match = assess_scope(paper, topic_scope)
+        if match["in_scope"]:
+            if topic_scope:
+                paper["topic_scope_match"] = match
+            scoped.append(paper)
+        else:
+            out_of_scope.append({**paper, "topic_scope_match": match})
+    merged = scoped
     merged.sort(key=lambda item: (item.get("publication_date", ""), item.get("title", "")), reverse=True)
     return {
         "generated_at": utc_now_iso(),
@@ -613,6 +628,9 @@ def collect(
         "sources_requested": sources,
         "source_counts": counts,
         "retrieved_count": retrieved_count,
+        "unique_keyword_count": keyword_count,
+        "off_topic_count": keyword_count - len(merged),
+        "off_topic_papers": out_of_scope,
         "unique_relevant_count": len(merged),
         "errors": errors,
         "coverage_warnings": unique_strings(coverage_warnings),
@@ -664,6 +682,7 @@ def main(argv: list[str] | None = None) -> int:
         end=end,
         sources=sources,
         relevance_terms=relevance_terms,
+        topic_scope=profile.get("topic_scope"),
     )
     result["mode"] = args.mode
     result["profile_name"] = clean_text(profile.get("profile_name"))

@@ -52,4 +52,10 @@ print(classify({'journal':'IEEE Transactions on Knowledge and Data Engineering',
 
 ## 默认策略
 
-当前默认为 label_only，等级仅作背景，不按场所身份排除候选。strong_recommendation_requires_verified_venue 默认为 false，允许证据充分的预印本被重点阅读；依旧必须标注未同行评议。默认关闭累计引用加分，避免把旧论文引用优势混成单篇质量。用户可自行选择 authority_first 或 strict_ccf_or_tier，但会减少前沿召回。
+排除策略仍为 label_only，不按场所身份额外排除；阅读顺序独立由研究配置 reading_order 控制。新配置默认 venue_first，同主题内已核实 CCF A→用户配置一档期刊→CCF B→二档期刊→CCF C→三档期刊→未分级/待核实。用户期刊分层不冒充 CCF 等级，默认空白，需要依据后再维护。
+
+场所优先模式下阅读重要性按场所60%+贡献40%计算，venue_importance 为个人代理分，不是客观科学质量。简报、正文与前三名都采用相同场所优先顺序。A类不足仍可推荐主题内其他等级或预印本；默认推荐目标10篇、复核池100篇，并查看30天补充。
+
+作者自述、简称或部分名称匹配保留 candidate_ccf，verified_venue=false；不得继承为 A 类优先。最终已分级论文须提供 venue_evidence（正式论文 URL、full/regular/journal 类型）。按 CCF 官方范围，会议评级仅对应正式长文，短文、Demo、Findings、Workshop 等不继承主会等级。当前只从 arXiv 自动收集时，应在人工复核阶段访问官方论文集/期刊记录，不能凭 arXiv 页面推断尚未录用。
+
+strong_recommendation_requires_verified_venue 默认为 false，允许证据充分的预印本重点阅读；依旧标注预印本身份。默认关闭累计引用加分。用户可自行选择 authority_first 或 strict_ccf_or_tier，但会减少前沿召回。
