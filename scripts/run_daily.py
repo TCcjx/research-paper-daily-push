@@ -70,9 +70,13 @@ def collect_stage(args: argparse.Namespace) -> Path:
     # 因此以今天和昨天构成候选池，再由 Codex 优先复核可能位于近24小时内的论文。
     raw, fresh, ranked = execute_window("24h", 2)
     used_window = "近24小时优先（按来源可用的日级日期，候选池覆盖今天和昨天）"
-    if int(ranked.get("recommended_count") or 0) < args.min_results:
-        raw, fresh, ranked = execute_window("7d", 7)
-        used_window = f"最近7天（因近24小时高分候选不足{args.min_results}篇而扩大）"
+    # 扩窗阶梯：24小时池的高分候选不足 min_results 时逐级放大窗口，
+    # 在不降低阈值的前提下尽量凑足候选；窗口上限 30 天，仍不足时如实输出。
+    for days in (7, 14, 30):
+        if int(ranked.get("recommended_count") or 0) >= args.min_results:
+            break
+        raw, fresh, ranked = execute_window(f"{days}d", days)
+        used_window = f"最近{days}天（因高分候选不足{args.min_results}篇而逐级扩大）"
 
     source_errors = raw.get("errors") or []
     warnings = [f"{item.get('source')}: {item.get('error')}" for item in source_errors]

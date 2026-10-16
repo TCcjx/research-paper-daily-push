@@ -69,6 +69,7 @@ class CollectStageTests(unittest.TestCase):
         self.tmp = Path(self._tmp.name)
         self.calls: list[tuple[str, tuple[str, ...]]] = []
         self.recommended_24h = 6
+        self.recommended_7d = 6
 
     def fake_run_script(self, name: str, *arguments: str) -> None:
         self.calls.append((name, arguments))
@@ -84,7 +85,7 @@ class CollectStageTests(unittest.TestCase):
             }
         if name == "ranked_7d.json":
             return {
-                "recommended_count": 2,
+                "recommended_count": self.recommended_7d,
                 "screened_count": 90,
                 "recommendations": [{"title": "扩窗候选"}],
                 "formula": "relevance*0.40 + ...",
@@ -121,6 +122,18 @@ class CollectStageTests(unittest.TestCase):
         executed = [name for name, _ in self.calls]
         self.assertEqual(
             executed, ["search_papers.py", "deduplicate.py", "rank_papers.py"] * 2
+        )
+
+    def test_window_expansion_ladder_runs_until_min_results_or_30_days(self) -> None:
+        """7 天池仍不足时逐级扩到 14 天、30 天，到顶后如实停止。"""
+        self.recommended_24h = 1
+        self.recommended_7d = 2
+        queue = self.collect()
+        self.assertIn("最近30天", queue["metadata"]["window"])
+        self.assertIn("不足5篇", queue["metadata"]["window"])
+        executed = [name for name, _ in self.calls]
+        self.assertEqual(
+            executed, ["search_papers.py", "deduplicate.py", "rank_papers.py"] * 4
         )
 
     def test_expansion_message_follows_min_results(self) -> None:
