@@ -72,3 +72,12 @@ system 为 cas 或 jcr，quartile 为1–4，year不晚于报告年份，categor
 默认不要求术语解释。dual 模式的 term_explanations 每项含 term、academic_explanation、plain_explanation，解释各不超过180字符且不同。只解释理解所需关键术语。detailed 模式可额外填 experimental_design、key_entities_mechanisms、target_system、future_direction、paper_potential；不要为凑字段臆造基金或论文潜力。
 
 updates 使用队列中有身份信息的更新记录；它是元数据通知，不是新论文推荐。成功交付后，history_status=update 的旧记录会推进，避免同一出版变化反复通知。推荐列表不得含重复DOI、arXiv ID或规范化题名。
+
+## 人工复核审计
+
+修改队列前保留原始自动队列（如 `review_queue.automated.json`）。可在 `review_audit.json` 中逐篇记录入选、待核实、日期超窗及理由；这些审计字段由复核者维护，不是脚本自动完成的证据核验。
+
+- 日期核验保存原元数据日期、出版商首次在线日期及实际读到的证据URL。卷期日期不能覆盖更早的首次在线日期；缺失日级日期或有冲突时继续待核实。日期超窗可单列 `date_exclusions`，不要写入代表场所不达标的 `publication_exclusions`；报告中通过 `metadata.warnings` 说明原因。
+- 官方页面索引可用 `evidence.retrieval_method=web_search_index`，接口记录可用 `source_api`，并在 supports 中限定可见信息。保留正文访问失败记录，不能仅因URL存在就设置verified；摘要级复核须在局限中明确未读全文。
+- 日期修正后的样本可另存 `search_30d.reviewed.json`，保留原始检索数据，并重新计算同范围的radar与观测快照。程序主题初筛数量与人工日期复核数量应分别说明。
+- 仅 `article_type` 同义标签变化的记录可留作 `metadata_only_differences` 审计，从报告updates中移除；不据此声称新增出版、录用或版本变化。
