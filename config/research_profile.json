@@ -24,11 +24,10 @@
   "sources": [],
   "watchlist": [],
   "disabled_sources": [
-    "openalex",
-    "crossref"
+    "openalex"
   ],
   "topic_scope": {},
-  "reading_order": "agent_first",
+  "reading_order": "latest_first",
   "deduplication_scope": "last_report",
   "publication_filter": {
     "enabled": true,

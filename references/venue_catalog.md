@@ -58,4 +58,4 @@ print(classify({'journal':'IEEE Transactions on Knowledge and Data Engineering',
 
 作者自述、简称或部分匹配保留candidate_ccf，不能直接准入。每篇须有官方论文页面或正式录用记录venue_evidence（规范场所、URL、类型、accepted/published、verified）。会议只接受full/regular，Findings/Workshop/Short/Demo不继承主会评级。arXiv是载体，不等同于尚未录用；核实正式场所后保留载体标识并单独展示真实录用状态。
 
-新模板采用agent_first：满足主题与场所后优先展示Agent结合；其余达标论文全部保留，不限篇数或评分门槛。兼容venue_first的场所60%+贡献40%重要性代理分，它不代表科学突破，也不能代替证据复核。
+新模板采用latest_first：满足主题与场所后按实际发表日期倒序，同日优先展示Agent结合；其余达标论文全部保留，不限篇数或评分门槛。兼容venue_first的场所60%+贡献40%重要性代理分，它不代表科学突破，也不能代替证据复核。

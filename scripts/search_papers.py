@@ -132,12 +132,9 @@ def search_europepmc(queries: list[str], start: date, end: date) -> list[dict[st
 
 
 def _crossref_date(item: dict[str, Any]) -> str:
-    for key in ("published-online", "published", "issued", "published-print", "created"):
+    for key in ("published-online", "published", "issued", "published-print"):
         value = item.get(key)
-        if key == "created" and isinstance(value, dict) and value.get("date-time"):
-            parsed = parse_date(value.get("date-time"))
-        else:
-            parsed = date_from_parts(value) if value else ""
+        parsed = date_from_parts(value) if value else ""
         if parsed:
             return parsed
     return ""
@@ -231,49 +228,62 @@ def search_semantic_scholar(queries: list[str], start: date, end: date) -> list[
         headers["x-api-key"] = api_key
     fields = "title,abstract,authors,venue,publicationDate,url,externalIds,publicationTypes,citationCount,openAccessPdf,journal"
     for index, query in enumerate(queries):
-        params = urlencode(
-            {
-                "query": compact_query(query),
-                "limit": 100,
-                "fields": fields,
-                "year": f"{start.year}-{end.year}",
-            }
-        )
-        payload = json_request(
-            f"https://api.semanticscholar.org/graph/v1/paper/search?{params}", headers=headers
-        )
-        if len(payload.get("data", [])) >= 100 or payload.get("next") or int(payload.get("total") or 0) > 100:
-            warnings.warn("Semantic Scholar 单查询只读取100条相关性结果，日期窗口可能覆盖不足")
-        for item in payload.get("data", []):
-            published = parse_date(item.get("publicationDate"))
-            if not published or not (start.isoformat() <= published <= end.isoformat()):
-                continue
-            external = item.get("externalIds") or {}
-            doi = normalize_doi(external.get("DOI"))
-            journal = item.get("journal") or {}
-            types = item.get("publicationTypes") or []
-            output.append(
-                {
-                    "doi": doi,
-                    "title": clean_text(item.get("title")),
-                    "authors": unique_strings(author.get("name") for author in item.get("authors", [])),
-                    "journal": clean_text(first_nonempty(journal.get("name"), item.get("venue"))),
-                    "publication_date": published,
-                    "url": clean_text(first_nonempty(item.get("url"), f"https://doi.org/{doi}" if doi else "")),
-                    "article_type": "; ".join(clean_text(value) for value in types),
-                    "abstract": clean_text(item.get("abstract")),
-                    "sources": ["Semantic Scholar"],
-                    "source_ids": {"semantic_scholar": clean_text(item.get("paperId"))},
-                    "citation_count": int(item.get("citationCount") or 0),
-                    "citation_counts": {"semanticscholar": int(item["citationCount"]) } if item.get("citationCount") is not None else {},
-                    "is_open_access": bool(item.get("openAccessPdf")),
-                    "is_preprint": any("preprint" in str(value).casefold() for value in types),
-                    "needs_verification": [] if item.get("abstract") else ["Semantic Scholar 未提供摘要，结论需从原文核实"],
-                }
+        token = None
+        seen_tokens = set()
+        for page in range(3):
+            if index or page:
+                time.sleep(1.05)
+            # Bulk search supports boolean operators and publication-date ordering.
+            translated = " ".join({"AND": "+", "OR": "|", "NOT": "-"}.get(t.upper(), t)
+                                  for t in _ARXIV_TOKEN.findall(query))
+            params = {"query": translated, "fields": fields,
+                      "publicationDateOrYear": f"{start.isoformat()}:{end.isoformat()}",
+                      "sort": "publicationDate:desc"}
+            if token:
+                params["token"] = token
+            payload = json_request(
+                f"https://api.semanticscholar.org/graph/v1/paper/search/bulk?{urlencode(params)}", headers=headers
             )
-        if index + 1 < len(queries):
-            # 官方给 API Key 的初始限额为每秒 1 次；匿名请求还会共享公共额度。
-            time.sleep(1.05)
+            if "data" not in payload or not isinstance(payload["data"], list):
+                raise ValueError("Semantic Scholar 返回无效的论文数据")
+            for item in payload.get("data", []):
+                published = parse_date(item.get("publicationDate"))
+                if not published or not (start.isoformat() <= published <= end.isoformat()):
+                    continue
+                external = item.get("externalIds") or {}
+                doi = normalize_doi(external.get("DOI"))
+                journal = item.get("journal") or {}
+                types = item.get("publicationTypes") or []
+                output.append(
+                    {
+                        "doi": doi,
+                        "title": clean_text(item.get("title")),
+                        "authors": unique_strings(author.get("name") for author in item.get("authors", [])),
+                        "journal": clean_text(first_nonempty(journal.get("name"), item.get("venue"))),
+                        "publication_date": published,
+                        "url": clean_text(first_nonempty(item.get("url"), f"https://doi.org/{doi}" if doi else "")),
+                        "article_type": "; ".join(clean_text(value) for value in types),
+                        "abstract": clean_text(item.get("abstract")),
+                        "sources": ["Semantic Scholar"],
+                        "source_ids": {"semantic_scholar": clean_text(item.get("paperId")),
+                                       **({"arxiv": external["ArXiv"]} if external.get("ArXiv") else {})},
+                        "citation_count": int(item.get("citationCount") or 0),
+                        "citation_counts": {"semanticscholar": int(item["citationCount"]) } if item.get("citationCount") is not None else {},
+                        "is_open_access": bool(item.get("openAccessPdf")),
+                        "is_preprint": bool(external.get("ArXiv")) or any("preprint" in str(value).casefold() for value in types),
+                        "needs_verification": [] if item.get("abstract") else ["Semantic Scholar 未提供摘要，结论需从原文核实"],
+                    }
+                )
+            next_token = payload.get("token")
+            if not next_token or not payload["data"]:
+                break
+            if next_token == token or next_token in seen_tokens:
+                warnings.warn("Semantic Scholar 分页token循环，样本可能截断")
+                break
+            if page == 2:
+                warnings.warn("Semantic Scholar 单查询达到3页（最多3000条）预算，样本可能截断")
+            seen_tokens.add(next_token)
+            token = next_token
     return output
 
 
@@ -532,7 +542,7 @@ def search_arxiv(queries: list[str], start: date, end: date) -> list[dict[str, A
             )
             url = f"https://export.arxiv.org/api/query?{params}"
             last_request_at = time.monotonic()
-            root = ElementTree.fromstring(text_request(url, timeout=60, retries=2))
+            root = ElementTree.fromstring(text_request(url, timeout=30, retries=4))
             error = root.find(f"{OPENSEARCH_NS}error")
             if error is not None:
                 details = clean_text(error.findtext(f"{ARXIV_NS}details", default=""))
@@ -588,23 +598,27 @@ def collect(
     if not sources:
         raise ValueError("至少选择一个文献来源")
     for source in sources:
+        print(f"正在检索来源：{source}", file=sys.stderr, flush=True)
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
                 found = SOURCE_FUNCTIONS[source](queries, start, end)
-            coverage_warnings.extend(f"{source}: {item.message}" for item in caught)
+            coverage_warnings.extend(f"{source}: {item.message}" for item in caught
+                                     if issubclass(item.category, UserWarning))
             counts[source] = len(found)
             papers.extend(found)
         # 各来源可能出现不同的解析或传输异常；逐个隔离，避免单一来源故障清空其他有效结果。
         except Exception as exc:  # noqa: BLE001
             counts[source] = 0
             errors.append({"source": source, "error": f"{type(exc).__name__}: {exc}"})
+            print(f"来源 {source} 失败，继续其他来源：{type(exc).__name__}", file=sys.stderr, flush=True)
     if len(errors) == len(sources):
         raise RuntimeError("所有文献来源均失败：" + "; ".join(f"{e['source']}: {e['error']}" for e in errors))
     retrieved_count = len(papers)
     merged = [
         paper for paper in deduplicate_papers(papers)
-        if topic_scope or plausible_relevance(paper, relevance_terms)
+        if start.isoformat() <= paper.get("publication_date", "") <= end.isoformat()
+        and (topic_scope or plausible_relevance(paper, relevance_terms))
     ]
     keyword_count = len(merged)
     # 准入先于时间窗口和活跃度统计，宽泛的 Agent 等关键词不能补足核心候选数。

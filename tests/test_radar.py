@@ -94,7 +94,7 @@ class RecallTests(unittest.TestCase):
         self.assertEqual(len(selected), 3)
 
     def test_source_presets_cover_relevant_domains(self):
-        self.assertEqual(["arxiv"], profile_sources({"source_preset": "computer_science"}))
+        self.assertEqual(["arxiv", "semanticscholar", "crossref"], profile_sources({"source_preset": "computer_science"}))
         self.assertIn("europepmc", profile_sources({"source_preset": "biomedical"}))
         self.assertEqual(profile_sources({}, "arxiv,crossref"), ["arxiv", "crossref"])
         with self.assertRaises(ProfileError):

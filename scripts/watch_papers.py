@@ -50,7 +50,7 @@ def check_watchlist(items: list[dict], limit: int = 20, *, sources: list[str] | 
             time.sleep(3)
             root = ElementTree.fromstring(text_request(
                 "https://export.arxiv.org/api/query?" + urlencode({"id_list": ",".join(arxiv), "max_results": len(arxiv)}),
-                timeout=60, retries=2))
+                timeout=30, retries=4))
             papers.extend(_arxiv_entry(e) for e in root.findall(f"{ATOM_NS}entry"))
         except Exception as exc:
             errors.append(f"关注论文 arXiv 查询失败：{type(exc).__name__}")

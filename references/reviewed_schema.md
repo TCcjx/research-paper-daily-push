@@ -23,7 +23,7 @@ prepare 生成的是待填写草稿，不能直接交付。默认 brief；完整
 | assessment | contribution、comparison、limitations、importance、confidence |
 | venue_evidence | 官方记录：venue 规范场所、url 实际论文/录用记录、publication_type（full/regular/journal）、status（accepted/published）、verified=true；URL也须列入evidence |
 | journal_quartiles | 期刊必需：体系、分区、年份、学科、场所和可核实来源，见下例 |
-| agent_assessment | agent_first必需：integrated=true/false；true时role说明具体作用，evidence_url指向本篇已读证据 |
+| agent_assessment | agent_first/latest_first必需：integrated=true/false；true时role说明具体作用，evidence_url指向本篇已读证据 |
 | research_inspiration | methods、limitations_validation，均为非空数组；其他启发可选 |
 | tags | 1–8个主题标签 |
 | strong_recommendation | 可选；true时必须有 strong_recommendation_reasons |
@@ -67,7 +67,7 @@ system 为 cas 或 jcr，quartile 为1–4，year不晚于报告年份，categor
 
 会议须核实CCF A/B主会 full/regular 长文。作者自述和简称不足为证，附属卷/短文不继承主会等级。arXiv载体保留is_preprint=true；官方录用/发表记录核实后可按真实场所准入，报告分别展示载体与录用状态。真实论文页面证据不能只用评级目录代替。程序只验证字段与一致性，复核者必须实际核对来源内容。
 
-`agent_first` 排序：经证据确认Agent结合优先，其次参考场所、贡献和日期；两组均无数量配额。填写Agent角色和本篇 evidence 中的URL，LLM或planning关键词本身不足以确认Agent。评分仍需诚实填写，但不再决定准入。兼容 `venue_first` 的场所60%+贡献40%个人重要性代理分，deliver自动计算；它不改变新场所门槛。
+`latest_first` 按实际发表日期倒序，同日使用下述Agent与场所排序。`agent_first` 排序：经证据确认Agent结合优先，其次参考场所、贡献和日期；两组均无数量配额。填写Agent角色和本篇 evidence 中的URL，LLM或planning关键词本身不足以确认Agent。评分仍需诚实填写，但不再决定准入。兼容 `venue_first` 的场所60%+贡献40%个人重要性代理分，deliver自动计算；它不改变新场所门槛。
 
 默认不要求术语解释。dual 模式的 term_explanations 每项含 term、academic_explanation、plain_explanation，解释各不超过180字符且不同。只解释理解所需关键术语。detailed 模式可额外填 experimental_design、key_entities_mechanisms、target_system、future_direction、paper_potential；不要为凑字段臆造基金或论文潜力。
 

@@ -8,6 +8,7 @@ import hashlib
 import html
 import json
 import os
+import random
 import re
 import sys
 import tempfile
@@ -15,6 +16,7 @@ import time
 from contextlib import contextmanager
 from collections.abc import Callable, Iterable
 from datetime import date, datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -198,6 +200,30 @@ def date_from_parts(parts: Any) -> str:
         return ""
 
 
+def retry_pause(error: Exception, attempt: int) -> None:
+    """Respect server cooldowns; stop this request if waiting exceeds our budget."""
+    limited = isinstance(error, HTTPError) and error.code == 429
+    delay = min((15 if limited else 3) * 2**attempt + random.uniform(0, 1), 60)
+    header = error.headers.get("Retry-After") if isinstance(error, HTTPError) and error.headers else None
+    if header:
+        try:
+            server_delay = float(header)
+        except ValueError:
+            try:
+                until = parsedate_to_datetime(header)
+                if until.tzinfo is None:
+                    until = until.replace(tzinfo=timezone.utc)
+                server_delay = (until - datetime.now(timezone.utc)).total_seconds()
+            except (ValueError, TypeError, OverflowError):
+                server_delay = 0
+        if server_delay > 60:
+            print(f"服务器要求等待 {server_delay:.0f} 秒，超过本次60秒等待预算；停止该请求，继续其他来源。", file=sys.stderr)
+            raise error
+        delay = max(delay, server_delay)
+    print(f"请求暂时失败（{type(error).__name__}），{delay:.1f} 秒后重试（第 {attempt + 1} 次重试）。", file=sys.stderr)
+    time.sleep(delay)
+
+
 def json_request(
     url: str,
     *,
@@ -226,17 +252,16 @@ def json_request(
                 charset = response.headers.get_content_charset() or "utf-8"
                 return json.loads(response.read().decode(charset))
         except HTTPError as exc:
+            exc.close()
             last_error = exc
             if exc.code not in {429, 500, 502, 503, 504} or attempt + 1 >= retries:
                 raise
-            retry_after = exc.headers.get("Retry-After")
-            delay = min(float(retry_after), 10.0) if retry_after and retry_after.isdigit() else 2**attempt
-            time.sleep(delay)
+            retry_pause(exc, attempt)
         except (URLError, TimeoutError, json.JSONDecodeError) as exc:
             last_error = exc
             if attempt + 1 >= retries:
                 raise
-            time.sleep(2**attempt)
+            retry_pause(exc, attempt)
     if last_error:
         raise last_error
     raise RuntimeError("HTTP 请求失败，但没有捕获到具体异常")
@@ -265,17 +290,16 @@ def text_request(
                 charset = response.headers.get_content_charset() or "utf-8"
                 return response.read().decode(charset, errors="replace")
         except HTTPError as exc:
+            exc.close()
             last_error = exc
             if exc.code not in {429, 500, 502, 503, 504} or attempt + 1 >= retries:
                 raise
-            retry_after = exc.headers.get("Retry-After")
-            delay = min(float(retry_after), 10.0) if retry_after and retry_after.isdigit() else 2**attempt
-            time.sleep(delay)
+            retry_pause(exc, attempt)
         except (URLError, TimeoutError, UnicodeDecodeError) as exc:
             last_error = exc
             if attempt + 1 >= retries:
                 raise
-            time.sleep(2**attempt)
+            retry_pause(exc, attempt)
     if last_error:
         raise last_error
     raise RuntimeError("文本请求失败，但没有捕获到具体异常")

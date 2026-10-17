@@ -24,7 +24,7 @@ def init_profile(args) -> None:
             raise ValueError('--topic 格式为 "主题名称=英文短语,同义词"')
         groups.append({"label": label.strip(), "weight": 80, "terms": words})
     profile = {"configured": True, "profile_name": args.name, "source_preset": args.source_preset,
-               "sources": [], "disabled_sources": ["openalex", "crossref"], "topic_scope": {}, "reading_order": "agent_first",
+               "sources": [], "disabled_sources": ["openalex"], "topic_scope": {}, "reading_order": "latest_first",
                "deduplication_scope": "last_report", "agent_priority_terms": ["agent", "agentic", "multi-agent", "智能体"],
                "publication_filter": {"enabled": True, "conference_min_ccf": "B", "journal_systems": ["cas", "jcr"], "journal_max_quartile": 2},
                "research_context": args.context or "", "priority_questions": [],

@@ -88,7 +88,7 @@ def collect_stage(args: argparse.Namespace) -> Path:
         cutoff = (end - timedelta(days=days-1)).isoformat()
         pool = [p for p in eligible if cutoff <= p.get("publication_date", "") <= today]
     reading_order = profile.get("reading_order", "score")
-    if reading_order in {"venue_first", "agent_first"} or not args.candidate_limit:
+    if reading_order in {"venue_first", "agent_first", "latest_first"} or not args.candidate_limit:
         # 场所优先时查看完整30天，避免当日预印本占满候选而漏掉近期 A 类论文。
         used_days, pool = 30, eligible
         candidates = select_review_candidates(pool, args.candidate_limit, reading_order=reading_order)
@@ -106,11 +106,13 @@ def collect_stage(args: argparse.Namespace) -> Path:
         warnings.append(f"30天内有 {len(eligible)} 篇主题内可复核论文，本次窗口与候选上限内展示 {len(candidates)} 篇；其余见 ranked_30d.json")
     used_window = ("近24小时优先（按日级日期，候选池覆盖今天和昨天）" if used_days == 2
                    else f"最近{used_days}天（相关候选不足{args.min_results}篇，近期补充单独标注）")
-    if reading_order in {"venue_first", "agent_first"} or not args.candidate_limit:
+    if reading_order in {"venue_first", "agent_first", "latest_first"} or not args.candidate_limit:
         used_window = "最近30天（同主题内场所等级优先，当日与近期补充按实际日期标注）"
-    if reading_order == "agent_first":
+    if reading_order in {"agent_first", "latest_first"}:
         stages = "、再".join(g["label"] for g in (profile.get("topic_scope") or {}).get("required_groups", []))
         used_window = f"最近30天（先{stages or '满足研究主题'}，最后优先Agent结合；不按篇数补足）"
+    if reading_order == "latest_first":
+        used_window = "最近30天（最新发表优先，今天/昨天按日级日期近似，较早论文标为近期补充；同日Agent结合优先）"
     queue = {
         "status": raw.get("status", "ok"), "generated_at": utc_now_iso(), "date": today,
         "mode": args.mode, "profile_name": profile.get("profile_name", ""),
@@ -235,7 +237,7 @@ def deliver_stage(args: argparse.Namespace) -> Path:
                                             deduplication_scope=active_profile.get("deduplication_scope", "all_history"))
         for paper in reviewed_payload["articles"]:
             paper["venue_ranking"] = paper["publication_decision"]["classification"]
-            if reading_order == "agent_first":
+            if reading_order in {"agent_first", "latest_first"}:
                 validate_agent_assessment(paper)
         reviewed_path = report_path.with_suffix(".reviewed.json")
     if reading_order == "venue_first":
@@ -250,7 +252,7 @@ def deliver_stage(args: argparse.Namespace) -> Path:
             apply_venue_importance(paper)
         reviewed_payload["metadata"]["venue_distribution"] = summarize_queue(reviewed_payload.get("articles", []), ranking)
         reviewed_path = report_path.with_suffix(".reviewed.json")
-    if args.queue or profile_scope or reading_order in {"venue_first", "agent_first"} or strict_publication:
+    if args.queue or profile_scope or reading_order in {"venue_first", "agent_first", "latest_first"} or strict_publication:
         atomic_write_json(reviewed_path, reviewed_payload)
     run_script("summarize_papers.py", "--input", str(reviewed_path), "--output", str(report_path), "--ranking", str(args.ranking))
 

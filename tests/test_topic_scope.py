@@ -86,15 +86,15 @@ class ScopeTests(unittest.TestCase):
 
     def test_default_sources_and_disabled_overrides(self):
         for preset in ("general", "computer_science", "biomedical"):
-            self.assertFalse({"openalex", "crossref"} & set(profile_sources({"source_preset": preset})))
-        self.assertEqual(profile_sources(PROFILE), ["arxiv"])
-        for source in ("crossref", "openalex"):
+            self.assertNotIn("openalex", profile_sources({"source_preset": preset}))
+        self.assertEqual(profile_sources(PROFILE), ["arxiv", "semanticscholar", "crossref"])
+        for source in ("openalex",):
             with self.assertRaises(ProfileError):
                 profile_sources(PROFILE, source)
 
     def test_paused_source_not_called_by_watchlist(self):
         with patch("watch_papers.json_request") as request, patch("watch_papers.text_request") as arxiv:
-            papers, warnings = check_watchlist([{"doi": "10.1000/only-doi"}], sources=profile_sources(PROFILE))
+            papers, warnings = check_watchlist([{"doi": "10.1000/only-doi"}], sources=["arxiv"])
         request.assert_not_called()
         arxiv.assert_not_called()
         self.assertEqual(papers, [])
@@ -118,7 +118,7 @@ class ScopedWorkflowTests(unittest.TestCase):
     def test_today_noise_does_not_prevent_same_topic_window_expansion(self):
         items = [paper(f"Agent memory reasoning study {i}") for i in range(14)]
         items += [paper("Agent temporal knowledge graph reasoning", "2026-10-05")]
-        args = run_daily.parse_args(["collect", "--profile", str(self.profile), "--mode", "agent_tkg",
+        args = run_daily.parse_args(["collect", "--sources", "arxiv", "--profile", str(self.profile), "--mode", "agent_tkg",
             "--to-date", "2026-10-16", "--output-dir", str(self.root / "run"),
             "--history", str(self.root / "history.json"), "--memory", str(self.root / "memory.json"),
             "--observations", str(self.root / "observations.json"), "--watch-limit", "0"])

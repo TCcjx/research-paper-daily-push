@@ -24,7 +24,7 @@
 - `strong_recommendation_rules`：包含 `labels`、可选 `methods`、`min_score` 和 `reason` 的条目。所有已配置条件都必须同时命中。
 - `roadmap_stages`：包含 `label` 和 `keywords` 的条目，只用于在研究记忆中归类已经确认的报告。
 - `tags`：偏好的报告标签。
-- `reading_order`：新模板/初始化采用 `agent_first`，主题和场所达标后Agent结合优先，其余完整保留；兼容 `venue_first`、`score`。候选及最终推荐默认不限篇数，`--candidate-limit 0 --max-results 0`；来源检索预算另计。
+- `reading_order`：新模板/初始化采用 `latest_first`，主题和场所达标后按实际发表日期倒序，同日Agent结合优先，其余完整保留；兼容 `agent_first`、`venue_first`、`score`。候选及最终推荐默认不限篇数，`--candidate-limit 0 --max-results 0`；来源检索预算另计。
 - `retrieval_queries`：非空时覆盖各模式的检索式，先广泛召回研究对象，再本地筛任务和方法。TKG示例所有模式共用对象查询，不预先限定Agent/LLM。
 - `agent_priority_terms`：仅为候选排序标记Agent线索；正式推荐仍须 `agent_assessment` 原文复核。
 - `deduplication_scope`：`last_report` 对最近实际交付论文的报告去重（零新增不清空参照批次）（新模板默认），`all_history` 为全历史。DOI/arXiv ID/题名识别同文，更新另列；不删除旧历史。
@@ -61,9 +61,9 @@ TKG示例用 `retrieval_queries` 统一检索时态知识图谱对象，按 `req
 
 ## 来源和关注列表
 
-source_preset：general / computer_science 默认 arxiv；biomedical 默认 europepmc、biorxiv。sources：来源标识数组，非空时覆盖预设；命令行 --sources 优先。可用标识为 europepmc、crossref、openalex、semanticscholar、biorxiv、arxiv。
+source_preset：general / computer_science 默认 arxiv、semanticscholar、crossref；biomedical 默认 europepmc、biorxiv。sources：来源标识数组，非空时覆盖预设；命令行 --sources 优先。可用标识为 europepmc、crossref、openalex、semanticscholar、biorxiv、arxiv。
 
-disabled_sources：暂停来源名单，模板/初始化默认 `["openalex", "crossref"]`。暂停来源不得出现在最终启用列表，否则在联网前报错。命令行不能绕过；恢复适配器先移出名单再明确启用。旧配置未填写此字段仍兼容，但来源预设已移除这两个接口。
+disabled_sources：暂停来源名单，模板/初始化默认 `["openalex"]`。暂停来源不得出现在最终启用列表，否则在联网前报错。命令行不能绕过；恢复适配器先移出名单再明确启用。旧配置未填写此字段仍兼容，新预设已恢复 Crossref；旧显式 sources 和 disabled_sources 不会被自动改写。
 
 watchlist：对象数组，每项含真实 doi 或 arxiv 编号，优先检查显式关注，再检查最近交付记录；默认合计最多20篇。只使用本次启用来源，arxiv 负责版本，crossref 启用后才检查 DOI 出版信息。无法检查的记录明确提示。--watch-limit 可调整，0关闭。不能用占位符运行。
 

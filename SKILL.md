@@ -19,11 +19,13 @@ description: 按研究领域收集近期论文、识别有证据的热点线索�
 
 运行 `python scripts/run_daily.py collect --profile <配置> --mode all`，控制台显示输出目录 `data/runs/<scope>/<日期>/`。阅读 `discovery.md` 与 `review_queue.json`，两者都是待复核数据。默认 `--candidate-limit 0 --max-results 0`，不截断；接口自身的检索预算仍须说明，不能声称穷尽全部文献。
 
-当前研究方向按固定顺序处理：**先时态知识图谱 → 再推理任务 → 场所达标与上次交付去重 → Agent 结合优先**。`retrieval_queries` 只限定 TKG 对象，所有模式共用，不能预先 AND Agent/LLM 而漏掉传统推理工作。按 `topic_scope.required_groups` 顺序逐级筛选，记录各阶段数量；静态KG、泛Agent和单纯图谱存储不进入最终推荐。
+当前研究方向按固定顺序处理：**先时态知识图谱 → 再推理任务 → 场所达标与上次交付去重 → 最新发表优先，同日 Agent 结合优先**。`retrieval_queries` 只限定 TKG 对象，所有模式共用，不能预先 AND Agent/LLM 而漏掉传统推理工作。按 `topic_scope.required_groups` 顺序逐级筛选，记录各阶段数量；静态KG、泛Agent和单纯图谱存储不进入最终推荐。
 
-统一查看30天；今天/昨天是日级日期近似，其余保留 `reading_lane=supplementary`，不得当作今日新增。`reading_order=agent_first` 先展示经原文证实的 Agent 结合论文，同组内参考场所、贡献与日期，其余达标推理论文全部保留。LLM方法不自动等同于Agent。
+统一查看30天；今天/昨天是日级日期近似，其余保留 `reading_lane=supplementary`，不得当作今日新增。`reading_order=latest_first` 按实际发表日期倒序，同日优先经原文证实的 Agent 结合论文，再参考场所与贡献；其余达标推理论文全部保留。兼容 `agent_first` 场景。不得把索引创建时间或新版上传时间当作首次发表时间。LLM方法不自动等同于Agent。
 
-来源按预设选择：general 和 computer_science 使用 arXiv；biomedical 使用 Europe PMC/bioRxiv。OpenAlex、Crossref 暂不纳入默认检索，新配置在 `disabled_sources` 中暂停这两个来源。暂停同时适用于版本跟踪，显式 `--sources` 也不能绕过；需恢复时先修改配置。Semantic Scholar 仅显式启用，不自动替补。来源失败、分页上限必须展示；全部来源失败则停止，不能说今天没有好论文。API范围与上限见 [data_sources.md](references/data_sources.md)。
+来源按预设选择：general 和 computer_science 同时使用 arXiv、Semantic Scholar、Crossref，分别补充预印本、跨库论文和正式出版元数据；biomedical 使用 Europe PMC/bioRxiv。旧配置显式 `sources=["arxiv"]` 不自动改变；用户授权多途径后更新 sources，并从 disabled_sources 移出 crossref。OpenAlex 仍默认暂停；暂停同时适用于版本跟踪，命令行不能绕过。各来源独立执行，单路失败保留其他有效结果；合并后按 DOI/arXiv ID/题名去重。Semantic Scholar 使用 bulk 检索、发表日期倒序与日期范围过滤，不按引用数筛掉新论文。来源失败、分页上限必须展示；全部来源失败则停止，不能说今天没有好论文。API范围与上限见 [data_sources.md](references/data_sources.md)。
+
+HTTP 429、临时5xx和网络超时使用有界指数退避与随机抖动。遵守 Retry-After 的秒数或HTTP日期，不能截短服务器等待要求；单次要求超过60秒则结束该请求并继续其他来源，后续再运行。arXiv 最多4次尝试（含首次），429缺少等待头时约15/30/60秒退避；其他检索接口默认最多3次尝试。400/401/403等非临时错误不自动重试；不无限重跑整批已成功来源。此机制在命令执行期间工作，不自动创建后台任务。
 
 ## 热点与重要性
 
@@ -57,7 +59,7 @@ description: 按研究领域收集近期论文、识别有证据的热点线索�
 
 用户或定时任务明确授权外部发送后才可运行 `deliver ... --provider auto`。凭据仅从环境变量读取；推送设置见 [wxpusher_setup.md](references/wxpusher_setup.md)。无渠道时保留报告并提示“微信推送尚未配置”。部分发送失败不能声称完整交付，也不能无限重发。
 
-`--queue` 追加对应检索的热点、警告与更新，并校验推荐来源与主题。保留 `topic_scope` 和原始摘要，不能用复核说明重写研究对象。当前 `deduplication_scope=last_report`：按最近一次实际交付论文的报告去重（零新增日报不清空参照批次）；缺少记忆时退回历史中的最近交付日期。原始历史保留；`all_history` 可切回全历史。相同 DOI/arXiv ID/题名视为同文，版本和正式出版变化进入 updates，不再次作为新推荐。watchlist 可关注 DOI/arXiv ID；每次默认检查明确关注和最近交付的最多20篇，仅调用本次启用的来源，跨越30天窗口，`--watch-limit 0` 关闭。当前只有 arXiv 时无法检查仅 DOI 的出版变化，会明确提示。更新栏目只说明元数据证实的出版/版本变化；不把版本变化当成新结论。后续工作的支持或反驳仍需实际阅读。
+`--queue` 追加对应检索的热点、警告与更新，并校验推荐来源与主题。保留 `topic_scope` 和原始摘要，不能用复核说明重写研究对象。当前 `deduplication_scope=last_report`：按最近一次实际交付论文的报告去重（零新增日报不清空参照批次）；缺少记忆时退回历史中的最近交付日期。原始历史保留；`all_history` 可切回全历史。相同 DOI/arXiv ID/题名视为同文，版本和正式出版变化进入 updates，不再次作为新推荐。watchlist 可关注 DOI/arXiv ID；每次默认检查明确关注和最近交付的最多20篇，仅调用本次启用的来源，跨越30天窗口，`--watch-limit 0` 关闭。仅启用 arXiv 时无法检查仅 DOI 的出版变化，会明确提示。更新栏目只说明元数据证实的出版/版本变化；不把版本变化当成新结论。后续工作的支持或反驳仍需实际阅读。
 
 观测 `data/observations.json` 与交付记忆分离：按配置、查询、来源隔离，同日替换，保留90天；交付历史和研究记忆仅在确认成功后推进。记忆不能证明用户偏好。语义改题且无共同标识的版本关联需人工核对，不自动模糊合并。
 

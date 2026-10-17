@@ -31,7 +31,7 @@ from venue_ranking import (
 )
 from venue_ranking import classify as classify_venue
 from venue_ranking import venue_priority, reading_sort_key, CCF_RANK
-from publication_policy import agent_match, agent_sort_key, evaluate_publication
+from publication_policy import agent_match, agent_sort_key, latest_sort_key, evaluate_publication
 
 WEIGHTS = {
     "relevance": 0.40,
@@ -314,8 +314,8 @@ def select_review_candidates(ranked: list[dict[str, Any]], limit: int | None = N
     """按日期优先，以主题轮转保证小主题有复核机会；不使用总分硬截断。"""
     eligible = [p for p in ranked if not p["excluded"]]
     limit = limit or len(eligible)
-    if reading_order == "agent_first":
-        eligible.sort(key=agent_sort_key, reverse=True)
+    if reading_order in {"agent_first", "latest_first"}:
+        eligible.sort(key=latest_sort_key if reading_order == "latest_first" else agent_sort_key, reverse=True)
         return eligible[:limit]
     if reading_order == "venue_first":
         # 先按场所分层，再在每层内轮转主题，低等级不能因轮转抢占 A 类位置。
@@ -367,7 +367,7 @@ def rank_payload(
     papers = extract_papers(payload)
     ranked = [rank_one(paper, profile, ranking) for paper in papers]
     order = profile.get("reading_order", "score")
-    ranked.sort(key=agent_sort_key if order == "agent_first" else reading_sort_key if order == "venue_first" else lambda item: item["recommendation_score"], reverse=True)
+    ranked.sort(key=latest_sort_key if order == "latest_first" else agent_sort_key if order == "agent_first" else reading_sort_key if order == "venue_first" else lambda item: item["recommendation_score"], reverse=True)
     ranked.sort(key=lambda item: item["excluded"])
     strict_venue = (profile.get("publication_filter") or {}).get("enabled", False)
     recommendations = [item for item in ranked if not item["excluded"] and (

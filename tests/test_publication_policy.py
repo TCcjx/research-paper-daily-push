@@ -59,6 +59,19 @@ def decision(p):
 
 
 class PublicationTests(unittest.TestCase):
+    def test_latest_first_keeps_newer_non_agent_ahead_of_older_agent(self):
+        newer = candidate(1, publication_date="2026-10-17")
+        older_agent = candidate(2, publication_date="2026-10-16",
+                                agent_assessment={"integrated": True, "role": "plans graph traversal",
+                                                  "evidence_url": "https://example.org/paper"})
+        newer_agent = candidate(3, publication_date="2026-10-17",
+                                agent_assessment=older_agent["agent_assessment"])
+        report = payload([older_agent, newer, newer_agent], publication_filter=POLICY,
+                         metadata={"reading_order": "latest_first"})
+        rendered = render_report(report)
+        self.assertLess(rendered.index(newer_agent["chinese_title"]), rendered.index(newer["chinese_title"]))
+        self.assertLess(rendered.index(newer["chinese_title"]), rendered.index(older_agent["chinese_title"]))
+
     def test_conferences_a_b_accepted_c_excluded(self):
         for venue, expected in ((A, "eligible"), (B, "eligible"), (C, "excluded")):
             with self.subTest(venue=venue):

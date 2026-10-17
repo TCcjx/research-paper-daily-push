@@ -4,10 +4,12 @@
   "report_language": "zh-CN",
   "source_preset": "computer_science",
   "sources": [
-    "arxiv"
+    "arxiv",
+    "semanticscholar",
+    "crossref"
   ],
   "watchlist": [],
-  "research_context": "研究主线为 temporal knowledge reasoning（时态知识推理）。先筛时态知识图谱对象，再筛推理任务，达标论文中优先阅读Agent直接参与规划、工具调用、路径选择、检索、验证或协作的工作，其余达标推理论文完整保留。会议仅保留已核实CCF A/B主会长文；期刊中科院一区/二区或JCR Q1/Q2，任一体系达标即可。候选和最终推荐均不限篇数，不设评分门槛；与上次实际交付论文去重，版本更新另列。未知场所或分区留待核实，不臆测等级。统一查看30天并标注实际日期，不以静态KG、泛Agent记忆或一般时间序列凑数。",
+  "research_context": "研究主题为时态知识图谱推理。先核对TKG对象，再筛选时态推理、问答、外推/插值、链接/事件预测、补全与规则推理。主题及场所达标后按实际发表日期倒序，同日优先Agent直接结合，并参考场所与贡献。Agent、LLM、记忆、GraphRAG仅作实现方法，不能扩展主题；不纳入普通Agent记忆、静态KG或一般时间序列。统一检索近30天，今天/昨天按日级日期近似，较早论文标为近期补充；候选与推荐篇数不限，不凑数。",
   "target_system": "带时间戳/时间区间的知识事实与事件四元组上的推理系统；重点为以 TKG 为环境、工具、结构化记忆或推理对象的 Agent。任务包括时间约束多跳推理、时态问答、事件/链接预测与时态一致性维护。",
   "priority_questions": [
     "Agent 能否通过分步规划、工具调用、子图检索和时态规则完成 TKG reasoning？它相较单次 LLM 调用或固定流水线的独立贡献是什么？",
@@ -347,8 +349,7 @@
     "#可复现性"
   ],
   "disabled_sources": [
-    "openalex",
-    "crossref"
+    "openalex"
   ],
   "topic_scope": {
     "name": "temporal knowledge reasoning",
@@ -402,7 +403,7 @@
       }
     ]
   },
-  "reading_order": "agent_first",
+  "reading_order": "latest_first",
   "deduplication_scope": "last_report",
   "publication_filter": {
     "enabled": true,

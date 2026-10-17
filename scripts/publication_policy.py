@@ -131,6 +131,11 @@ def agent_sort_key(paper: dict, *, reviewed: bool = False) -> tuple:
     return (integrated, *rest)
 
 
+def latest_sort_key(paper: dict, *, reviewed: bool = False) -> tuple:
+    """Actual publication date first; prefer verified agents within the same date."""
+    return (paper.get("publication_date", ""), *agent_sort_key(paper, reviewed=reviewed))
+
+
 def partition_publications(papers: list[dict], policy: dict, ranking: dict, *, year: int):
     groups = {"eligible": [], "excluded": [], "pending": []}
     for source in papers:

@@ -67,7 +67,7 @@ python scripts/run_daily.py deliver --profile config/my.local.json --reviewed "$
 
 ## 来源与边界
 
-计算机方向默认使用 **arXiv**；生物医学预设使用 Europe PMC、bioRxiv。**OpenAlex、Crossref 当前暂停默认使用**，版本跟踪也遵守来源选择。arXiv 无法覆盖全部会议和期刊，正式发表状态需另行核实。
+计算机方向默认使用 **arXiv、Semantic Scholar、Crossref** 三路检索，单路失败保留其他结果，限流与临时错误有界退避重试。OpenAlex 仍暂停默认使用；生物医学预设使用 Europe PMC、bioRxiv。新配置按实际发表日期优先展示，近30天较早论文标为补充；正式发表状态与分区需另行核实。旧配置显式来源名单保持不变，启用多来源时需同步调整 `sources` 和 `disabled_sources`。
 
 热点仅表示同主题检索样本的发文活跃度；缺源或截断时不判断升温。项目不自动创建定时任务，仅运行 `collect` 会生成待复核候选。
 

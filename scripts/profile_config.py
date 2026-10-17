@@ -15,8 +15,8 @@ SKILL_DIR = SCRIPT_DIR.parent
 DEFAULT_PROFILE = SKILL_DIR / "config" / "research_profile.json"
 
 SOURCE_PRESETS = {
-    "general": ["arxiv"],
-    "computer_science": ["arxiv"],
+    "general": ["arxiv", "semanticscholar", "crossref"],
+    "computer_science": ["arxiv", "semanticscholar", "crossref"],
     "biomedical": ["europepmc", "biorxiv"],
 }
 SOURCE_NAMES = {"crossref", "openalex", "arxiv", "europepmc", "biorxiv", "semanticscholar"}
@@ -77,8 +77,8 @@ def load_profile(path: str | Path = DEFAULT_PROFILE, *, require_configured: bool
     profile.setdefault("strong_recommendation_rules", [])
     profile.setdefault("roadmap_stages", [])
     profile.setdefault("tags", [])
-    if profile.get("reading_order", "score") not in {"score", "venue_first", "agent_first"}:
-        raise ProfileError("reading_order 必须是 score、venue_first 或 agent_first")
+    if profile.get("reading_order", "score") not in {"score", "venue_first", "agent_first", "latest_first"}:
+        raise ProfileError("reading_order 必须是 score、venue_first、agent_first 或 latest_first")
     if profile.get("deduplication_scope", "all_history") not in {"all_history", "last_report"}:
         raise ProfileError("deduplication_scope 必须是 all_history/last_report")
     for field in ("retrieval_queries", "agent_priority_terms"):

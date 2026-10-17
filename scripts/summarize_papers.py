@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 from common import ChineseArgumentParser, clean_text, load_json, normalize_doi, normalize_title, looks_like_preprint
 from topic_scope import require_scope, validate_scope
 from venue_ranking import reading_sort_key, venue_priority, venue_importance, load_ranking
-from publication_policy import validate_policy, evaluate_publication, validate_agent_assessment, agent_sort_key
+from publication_policy import validate_policy, evaluate_publication, validate_agent_assessment, agent_sort_key, latest_sort_key
 from deduplicate import arxiv_identity
 
 REQUIRED_INSPIRATION = ("methods", "limitations_validation")
@@ -441,8 +441,8 @@ def render_report(payload: dict[str, Any], strict: bool = True, ranking: dict | 
             errors.append("date 必须是有效的 YYYY-MM-DD 日期")
     require_term_explanations = clean_text(payload.get("term_explanation_mode")).casefold() == "dual"
     reading_order = (payload.get("metadata") or {}).get("reading_order", "score")
-    if reading_order not in {"score", "venue_first", "agent_first"}:
-        errors.append("metadata.reading_order 必须是 score/venue_first/agent_first")
+    if reading_order not in {"score", "venue_first", "agent_first", "latest_first"}:
+        errors.append("metadata.reading_order 必须是 score/venue_first/agent_first/latest_first")
     for index, article in enumerate(articles):
         if not isinstance(article, dict):
             errors.append(f"article[{index}] 必须是对象")
@@ -456,7 +456,7 @@ def render_report(payload: dict[str, Any], strict: bool = True, ranking: dict | 
                     errors.append(f"article[{index}] 未通过最终场所门槛：{decision['reason']}")
                 if strict:
                     try:
-                        if reading_order == "agent_first":
+                        if reading_order in {"agent_first", "latest_first"}:
                             validate_agent_assessment(article)
                         urls = {e.get("url") for e in (article.get("evidence") or []) if isinstance(e, dict)}
                         if (article.get("venue_evidence") or {}).get("url") not in urls:
@@ -502,7 +502,7 @@ def render_report(payload: dict[str, Any], strict: bool = True, ranking: dict | 
     metadata = payload.get("metadata") or {}
     retrieved = int(metadata.get("retrieved_count") or 0)
     screened = int(metadata.get("screened_count") or 0)
-    sort_key = (lambda p: agent_sort_key(p, reviewed=True)) if reading_order == "agent_first" else reading_sort_key if reading_order == "venue_first" else lambda p: int(p.get("recommendation_score") or 0)
+    sort_key = (lambda p: latest_sort_key(p, reviewed=True)) if reading_order == "latest_first" else (lambda p: agent_sort_key(p, reviewed=True)) if reading_order == "agent_first" else reading_sort_key if reading_order == "venue_first" else lambda p: int(p.get("recommendation_score") or 0)
     articles = sorted(articles, key=sort_key, reverse=True)
     parts = [
         "# 【今日科研文献雷达】",
@@ -520,6 +520,8 @@ def render_report(payload: dict[str, Any], strict: bool = True, ranking: dict | 
         parts += ["阅读顺序：同主题内已核实 CCF A 类优先，再参考其他场所等级、相关性和贡献；未核实录用不按 A 类计算。重要性按场所60%与贡献40%计算，为个人阅读优先级。", ""]
     if publication_gate:
         parts += ["场所门槛：会议CCF A/B；期刊中科院一区/二区或JCR Q1/Q2，任一达标即可。最终篇数不限，不以推荐分设门槛。", ""]
+    if reading_order == "latest_first":
+        parts += ["阅读顺序：主题和场所达标后按实际发表日期倒序；同日优先经证据核实的Agent结合工作。今天/昨天按日级日期近似，较早论文标为近期补充。", ""]
     if reading_order == "agent_first":
         stages = " → ".join(g["label"] for g in (payload.get("topic_scope") or {}).get("required_groups", []))
         parts += [f"阅读顺序：{stages or '先满足研究主题'}；场所达标后优先展示经证据核实的Agent结合工作，其余达标论文完整保留。", ""]
